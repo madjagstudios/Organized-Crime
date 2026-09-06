@@ -1,0 +1,89 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>OrganizedCrime</AssemblyName>
+    <RootNamespace>OrganizedCrime</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <ScheduleOnePath Condition="'$(ScheduleOnePath)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Schedule I</ScheduleOnePath>
+    <Il2CppAssemblyPath Condition="Exists('$(ScheduleOnePath)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll')">$(ScheduleOnePath)\MelonLoader\Il2CppAssemblies</Il2CppAssemblyPath>
+    <GameAssemblyPath Condition="'$(Il2CppAssemblyPath)' != ''">$(Il2CppAssemblyPath)</GameAssemblyPath>
+    <GameAssemblyPath Condition="'$(GameAssemblyPath)' == ''">$(ScheduleOnePath)\Schedule I_Data\Managed</GameAssemblyPath>
+    <MelonLoaderNet6Path>$(ScheduleOnePath)\MelonLoader\net6</MelonLoaderNet6Path>
+
+    <!-- OC-70: the OC-69 Arthur spike (Release1ArthurNpc, its native runtime, its harness, its ready
+         pump, its load reconcile, and Mod.cs's F3/F4/F5 keys) compiles only when this symbol is
+         defined. Debug defines it so the spike stays reachable for local owner QA; Release does not,
+         so the shipped Release DLL contains no Arthur NPC subclass. (Final review correction: this
+         comment previously said "no NPC subclass" without qualification; Release1NellNpc, Nell's own
+         S1API NPC subclass, ships in every configuration and is unrelated to this spike.) -->
+    <DefineConstants Condition="'$(Configuration)'=='Debug'">$(DefineConstants);OC_OWNER_SPIKES</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderNet6Path)\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MelonLoaderNet6Path)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MelonLoaderNet6Path)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="S1API.Il2Cpp.MelonLoader">
+      <HintPath>$(ScheduleOnePath)\Mods\S1API.Il2Cpp.MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameAssemblyPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppScheduleOne.Core">
+      <HintPath>$(GameAssemblyPath)\Il2CppScheduleOne.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(GameAssemblyPath)\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppFishNet.Runtime">
+      <HintPath>$(GameAssemblyPath)\Il2CppFishNet.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.AIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.JSONSerializeModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

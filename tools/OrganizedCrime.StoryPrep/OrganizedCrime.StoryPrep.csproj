@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OrganizedCrime.StoryPrep</AssemblyName>
+    <RootNamespace>OrganizedCrime.StoryPrep</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- net6.0 is fixed by MelonLoader across this whole repo, not a choice this tool makes on its
+         own; the EOL nag only fires for OutputType Exe projects (the rest of the repo is Library
+         output), so it is switched off here the same way it is implicitly off everywhere else. -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+  </PropertyGroup>
+
+  <!--
+    This tool must build and run without MelonLoader or Schedule I installed: it links the pure,
+    game-free slice of the mod's Release 1 story engine (state, transitions, and the save codec)
+    straight out of tools/OrganizedCrime by source, the same linking approach the test project uses,
+    but it carries none of the MelonLoader/Unity/Il2Cpp <Reference> entries the mod project and the
+    test project need for the rest of the mod. Every file below is free of those usings; that is
+    what makes linking them into a plain console app possible.
+  -->
+  <ItemGroup>
+    <Compile Include="..\OrganizedCrime\Runtime\Release1ProductionActivityContracts.cs" Link="Runtime\Release1ProductionActivityContracts.cs" />
+    <Compile Include="..\OrganizedCrime\Runtime\OrganizedCrimeLog.cs" Link="Runtime\OrganizedCrimeLog.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1MissionCatalog.cs" Link="Model\Release1MissionCatalog.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1StoryContracts.cs" Link="Model\Release1StoryContracts.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1StoryTransitions.cs" Link="Model\Release1StoryTransitions.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1LogicalCorrelation.cs" Link="Model\Release1LogicalCorrelation.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1NativeEffectJournal.cs" Link="Model\Release1NativeEffectJournal.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1SmallCourtesyAssignment.cs" Link="Model\Release1SmallCourtesyAssignment.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1WrongAddressAssignment.cs" Link="Model\Release1WrongAddressAssignment.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1RoomWithNoNameAssignment.cs" Link="Model\Release1RoomWithNoNameAssignment.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1ShortNoticeAssignment.cs" Link="Model\Release1ShortNoticeAssignment.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1KeepTheLightsOffAssignment.cs" Link="Model\Release1KeepTheLightsOffAssignment.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1TheEnvelopeAssignment.cs" Link="Model\Release1TheEnvelopeAssignment.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1DeadDropSelection.cs" Link="Model\Release1DeadDropSelection.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1PhonePresentationAttempt.cs" Link="Model\Release1PhonePresentationAttempt.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1PresentationReceipt.cs" Link="Model\Release1PresentationReceipt.cs" />
+    <Compile Include="..\OrganizedCrime\Persistence\Release1StorySaveEnvelope.cs" Link="Persistence\Release1StorySaveEnvelope.cs" />
+    <Compile Include="..\OrganizedCrime\Persistence\Release1StorySaveCodec.cs" Link="Persistence\Release1StorySaveCodec.cs" />
+    <Compile Include="..\OrganizedCrime\Persistence\Release1StorySavePath.cs" Link="Persistence\Release1StorySavePath.cs" />
+    <Compile Include="..\OrganizedCrime\Persistence\Release1StoryStateStore.cs" Link="Persistence\Release1StoryStateStore.cs" />
+    <Compile Include="..\OrganizedCrime\Runtime\Release1StoryRuntimeContracts.cs" Link="Runtime\Release1StoryRuntimeContracts.cs" />
+    <Compile Include="..\OrganizedCrime\Runtime\Release1StoryRuntimeService.cs" Link="Runtime\Release1StoryRuntimeService.cs" />
+    <Compile Include="..\OrganizedCrime\Runtime\OrganizedCrimeTimingReceipts.cs" Link="Runtime\OrganizedCrimeTimingReceipts.cs" />
+    <Compile Include="..\OrganizedCrime\Runtime\Release1ShortNoticeValueRule.cs" Link="Runtime\Release1ShortNoticeValueRule.cs" />
+    <Compile Include="..\OrganizedCrime\Runtime\Release1PhoneCallContracts.cs" Link="Runtime\Release1PhoneCallContracts.cs" />
+  </ItemGroup>
+</Project>

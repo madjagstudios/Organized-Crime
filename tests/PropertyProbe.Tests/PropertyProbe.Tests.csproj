@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\tools\PropertyProbe\Model\*.cs" Link="Model\%(Filename)%(Extension)" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertyCandidateRanker.cs" Link="Reporting\PropertyCandidateRanker.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertySnapshotFormatter.cs" Link="Reporting\PropertySnapshotFormatter.cs" Condition="Exists('..\..\tools\PropertyProbe\Reporting\PropertySnapshotFormatter.cs')" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\BuildingCensusFormatter.cs" Link="Reporting\BuildingCensusFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertyPromotionPreflightFormatter.cs" Link="Reporting\PropertyPromotionPreflightFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertyPromotionExperimentFormatter.cs" Link="Reporting\PropertyPromotionExperimentFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertyNetworkInitializationFormatter.cs" Link="Reporting\PropertyNetworkInitializationFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertySpawnExperimentFormatter.cs" Link="Reporting\PropertySpawnExperimentFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertySpawnEligibilityFormatter.cs" Link="Reporting\PropertySpawnEligibilityFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertyNetworkRootInspectionFormatter.cs" Link="Reporting\PropertyNetworkRootInspectionFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertyDirectAttachmentFormatter.cs" Link="Reporting\PropertyDirectAttachmentFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\PropertyRootTopologyFormatter.cs" Link="Reporting\PropertyRootTopologyFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\FishNetCapabilityFormatter.cs" Link="Reporting\FishNetCapabilityFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\FishNetPrefabObjectsFormatter.cs" Link="Reporting\FishNetPrefabObjectsFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\FishNetRuntimePrefabCollectionFormatter.cs" Link="Reporting\FishNetRuntimePrefabCollectionFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\FishNetRuntimeBucketCreationFormatter.cs" Link="Reporting\FishNetRuntimeBucketCreationFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\FishNetRuntimeBucketLifecycleFormatter.cs" Link="Reporting\FishNetRuntimeBucketLifecycleFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\FishNetRuntimePrefabRegistrationFormatter.cs" Link="Reporting\FishNetRuntimePrefabRegistrationFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\FishNetRuntimePrefabSpawnFormatter.cs" Link="Reporting\FishNetRuntimePrefabSpawnFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\RuntimePropertyVerticalSliceFormatter.cs" Link="Reporting\RuntimePropertyVerticalSliceFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\SafehouseCensusFormatter.cs" Link="Reporting\SafehouseCensusFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\SafehouseCensusContract.cs" Link="Reporting\SafehouseCensusContract.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\SafehouseLocationCaptureFormatter.cs" Link="Reporting\SafehouseLocationCaptureFormatter.cs" />
+    <Compile Include="..\..\tools\PropertyProbe\Reporting\NightclubTimingFormatter.cs" Link="Reporting\NightclubTimingFormatter.cs" />
+  </ItemGroup>
+</Project>

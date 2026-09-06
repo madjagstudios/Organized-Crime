@@ -1,0 +1,65 @@
+namespace OrganizedCrime.PropertyProbe.Model;
+
+public sealed record FishNetRuntimePrefabSpawnSnapshot(
+    ushort CollectionId,
+    bool ServerManagerPresent,
+    bool ServerAvailable,
+    bool RegistrationPassed,
+    bool SpawnAttempted,
+    bool SpawnPassed,
+    bool DespawnAttempted,
+    bool DespawnPassed,
+    bool NetworkObjectPresent,
+    bool Networked,
+    bool Spawned,
+    bool ServerInitialized,
+    string NetworkState,
+    int ObjectId,
+    int PrefabId,
+    ushort SpawnableCollectionId,
+    bool BucketCleanupAttempted,
+    bool BucketCleanupPassed,
+    bool TemporaryObjectDestroyed,
+    bool AuthoredCollectionUnchanged,
+    bool DocksNetworkIdentityUnchanged,
+    bool OwnershipAttempted,
+    bool PersistenceAttempted,
+    bool PropertyMutationAttempted,
+    string Gate,
+    string? FailureReason)
+{
+    public static FishNetRuntimePrefabSpawnSnapshot Test(
+        bool serverAvailable = false,
+        bool spawnAttempted = false,
+        bool spawnPassed = false,
+        bool cleanupPassed = false)
+    {
+        return new FishNetRuntimePrefabSpawnSnapshot(
+            CollectionId: 65000,
+            ServerManagerPresent: serverAvailable,
+            ServerAvailable: serverAvailable,
+            RegistrationPassed: spawnAttempted,
+            SpawnAttempted: spawnAttempted,
+            SpawnPassed: spawnPassed,
+            DespawnAttempted: spawnPassed,
+            DespawnPassed: cleanupPassed,
+            NetworkObjectPresent: spawnAttempted,
+            Networked: spawnAttempted,
+            Spawned: spawnPassed,
+            ServerInitialized: spawnPassed,
+            NetworkState: spawnPassed ? "Spawned" : "Unset",
+            ObjectId: spawnPassed ? 1 : 0,
+            PrefabId: 0,
+            SpawnableCollectionId: spawnAttempted ? (ushort)65000 : (ushort)0,
+            BucketCleanupAttempted: cleanupPassed,
+            BucketCleanupPassed: cleanupPassed,
+            TemporaryObjectDestroyed: cleanupPassed,
+            AuthoredCollectionUnchanged: true,
+            DocksNetworkIdentityUnchanged: true,
+            OwnershipAttempted: false,
+            PersistenceAttempted: false,
+            PropertyMutationAttempted: false,
+            Gate: spawnPassed && cleanupPassed ? "spawn-passed" : "spawn-partial",
+            FailureReason: null);
+    }
+}

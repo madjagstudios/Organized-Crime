@@ -1,0 +1,310 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <ScheduleOnePath Condition="'$(ScheduleOnePath)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Schedule I</ScheduleOnePath>
+    <Il2CppAssemblyPath>$(ScheduleOnePath)\MelonLoader\Il2CppAssemblies</Il2CppAssemblyPath>
+    <MelonLoaderNet6Path>$(ScheduleOnePath)\MelonLoader\net6</MelonLoaderNet6Path>
+
+    <!-- OC-70: this test project always defines OC_OWNER_SPIKES, regardless of its own configuration,
+         so Release1ArthurFieldContactHarnessTests.cs, Release1ArthurFieldContactReadyPumpTests.cs, and
+         Release1ArthurLoadReconcileTests.cs keep exercising the spike under
+         "dotnet test ... -c Release" even though the shipping mod's own -c Release build excludes it. -->
+    <DefineConstants>$(DefineConstants);OC_OWNER_SPIKES</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1MissionCatalog.cs" Link="Model\Release1MissionCatalog.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1StoryContracts.cs" Link="Model\Release1StoryContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1SmallCourtesyAssignment.cs" Link="Model\Release1SmallCourtesyAssignment.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1WrongAddressAssignment.cs" Link="Model\Release1WrongAddressAssignment.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1RoomWithNoNameAssignment.cs" Link="Model\Release1RoomWithNoNameAssignment.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1ShortNoticeAssignment.cs" Link="Model\Release1ShortNoticeAssignment.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1KeepTheLightsOffAssignment.cs" Link="Model\Release1KeepTheLightsOffAssignment.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1SmallCourtesyNativeEffectIdentity.cs" Link="Model\Release1SmallCourtesyNativeEffectIdentity.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1DeadDropSelection.cs" Link="Model\Release1DeadDropSelection.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1ConsignmentObservation.cs" Link="Model\Release1ConsignmentObservation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1LogicalCorrelation.cs" Link="Model\Release1LogicalCorrelation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1PhonePresentationAttempt.cs" Link="Model\Release1PhonePresentationAttempt.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1PresentationReceipt.cs" Link="Model\Release1PresentationReceipt.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1StoryTransitions.cs" Link="Model\Release1StoryTransitions.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1NativeEffectJournal.cs" Link="Model\Release1NativeEffectJournal.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1TheEnvelopeAssignment.cs" Link="Model\Release1TheEnvelopeAssignment.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1TheEnvelopeClosetPlan.cs" Link="Model\Release1TheEnvelopeClosetPlan.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1TheEnvelopeObservation.cs" Link="Model\Release1TheEnvelopeObservation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\Release1StorySaveEnvelope.cs" Link="Persistence\Release1StorySaveEnvelope.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\Release1StorySaveCodec.cs" Link="Persistence\Release1StorySaveCodec.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\Release1StorySavePath.cs" Link="Persistence\Release1StorySavePath.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\Release1StoryStateStore.cs" Link="Persistence\Release1StoryStateStore.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1StoryRuntimeContracts.cs" Link="Runtime\Release1StoryRuntimeContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1StoryRuntimeService.cs" Link="Runtime\Release1StoryRuntimeService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1SmallCourtesyContracts.cs" Link="Runtime\Release1SmallCourtesyContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1FieldContactContracts.cs" Link="Runtime\Release1FieldContactContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ArthurFieldContactHarness.cs" Link="Runtime\Release1ArthurFieldContactHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ArthurLoadReconcile.cs" Link="Runtime\Release1ArthurLoadReconcile.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ArthurFieldContactReadyPump.cs" Link="Runtime\Release1ArthurFieldContactReadyPump.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1SmallCourtesyMissionService.cs" Link="Runtime\Release1SmallCourtesyMissionService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1WrongAddressContracts.cs" Link="Runtime\Release1WrongAddressContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1WrongAddressMissionService.cs" Link="Runtime\Release1WrongAddressMissionService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1RoomWithNoNameContracts.cs" Link="Runtime\Release1RoomWithNoNameContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1RoomWithNoNameMissionService.cs" Link="Runtime\Release1RoomWithNoNameMissionService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ShortNoticeContracts.cs" Link="Runtime\Release1ShortNoticeContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ShortNoticeMissionService.cs" Link="Runtime\Release1ShortNoticeMissionService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1KeepTheLightsOffContracts.cs" Link="Runtime\Release1KeepTheLightsOffContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1KeepTheLightsOffMissionService.cs" Link="Runtime\Release1KeepTheLightsOffMissionService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1WrongAddressPresentation.cs" Link="Runtime\Release1WrongAddressPresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1WrongAddressComposition.cs" Link="Runtime\Release1WrongAddressComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1RoomWithNoNameComposition.cs" Link="Runtime\Release1RoomWithNoNameComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ShortNoticeComposition.cs" Link="Runtime\Release1ShortNoticeComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1KeepTheLightsOffComposition.cs" Link="Runtime\Release1KeepTheLightsOffComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1RoomWithNoNamePresentation.cs" Link="Runtime\Release1RoomWithNoNamePresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ShortNoticePresentation.cs" Link="Runtime\Release1ShortNoticePresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1KeepTheLightsOffPresentation.cs" Link="Runtime\Release1KeepTheLightsOffPresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1TheEnvelopePresentation.cs" Link="Runtime\Release1TheEnvelopePresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1TheEnvelopeComposition.cs" Link="Runtime\Release1TheEnvelopeComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1RewardMath.cs" Link="Runtime\Release1RewardMath.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ShortNoticeValueRule.cs" Link="Runtime\Release1ShortNoticeValueRule.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1SmallCourtesyPresentation.cs" Link="Runtime\Release1SmallCourtesyPresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1PresentationPlan.cs" Link="Runtime\Release1PresentationPlan.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1NativePresentationContracts.cs" Link="Runtime\Release1NativePresentationContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1PresentationProjector.cs" Link="Runtime\Release1PresentationProjector.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1PresentationMode.cs" Link="Runtime\Release1PresentationMode.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1NativePresentationSupport.cs" Link="Runtime\Release1NativePresentationSupport.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ChiefCampbellCopy.cs" Link="Runtime\Release1ChiefCampbellCopy.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1SmallCourtesyComposition.cs" Link="Runtime\Release1SmallCourtesyComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\S1ApiRelease1SmallCourtesyWorld.cs" Link="Runtime\S1ApiRelease1SmallCourtesyWorld.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1WrongAddressStagingHarness.cs" Link="Runtime\Release1WrongAddressStagingHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ShortNoticeQuantityHarness.cs" Link="Runtime\Release1ShortNoticeQuantityHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1TheEnvelopeCashGateHarness.cs" Link="Runtime\Release1TheEnvelopeCashGateHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1TheEnvelopeClosetCashGateHarness.cs" Link="Runtime\Release1TheEnvelopeClosetCashGateHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1TheEnvelopeContracts.cs" Link="Runtime\Release1TheEnvelopeContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1TheEnvelopeMissionService.cs" Link="Runtime\Release1TheEnvelopeMissionService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ConditionWindow.cs" Link="Runtime\Release1ConditionWindow.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ProductionActivityContracts.cs" Link="Runtime\Release1ProductionActivityContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1KeepTheLightsOffProductionGateHarness.cs" Link="Runtime\Release1KeepTheLightsOffProductionGateHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ProductionActivityClassifier.cs" Link="Runtime\Release1ProductionActivityClassifier.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ConditionWindowCopy.cs" Link="Runtime\Release1ConditionWindowCopy.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ConvergenceThrottle.cs" Link="Runtime\Release1ConvergenceThrottle.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1HoldRoomContracts.cs" Link="Runtime\Release1HoldRoomContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1HoldWindow.cs" Link="Runtime\Release1HoldWindow.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1RoomWithNoNameHoldRoomHarness.cs" Link="Runtime\Release1RoomWithNoNameHoldRoomHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1QuietCensusClassifier.cs" Link="Runtime\Release1QuietCensusClassifier.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1QuietWindow.cs" Link="Runtime\Release1QuietWindow.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1PhoneCallContracts.cs" Link="Runtime\Release1PhoneCallContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1PhoneCallService.cs" Link="Runtime\Release1PhoneCallService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1TransitionPublisherService.cs" Link="Runtime\Release1TransitionPublisherService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\OrganizedCrimeTimingReceipts.cs" Link="Runtime\OrganizedCrimeTimingReceipts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\OrganizedCrimeLog.cs" Link="Runtime\OrganizedCrimeLog.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ProductionComposition.cs" Link="Runtime\Release1ProductionComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1DecisionPromptHost.cs" Link="Runtime\Release1DecisionPromptHost.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\OcRelease1PhoneCallDefinition.cs" Link="Runtime\OcRelease1PhoneCallDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\S1ApiRelease1PhoneCallQueue.cs" Link="Runtime\S1ApiRelease1PhoneCallQueue.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1IntroPresentation.cs" Link="Runtime\Release1IntroPresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1StoryHostIdentity.cs" Link="Runtime\Release1StoryHostIdentity.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1StoryOwnerQaRecognitionHarness.cs" Link="Runtime\Release1StoryOwnerQaRecognitionHarness.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1PostBenziesUnlockContracts.cs" Link="Runtime\Release1PostBenziesUnlockContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1PostBenziesUnlockReader.cs" Link="Runtime\Release1PostBenziesUnlockReader.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\S1CartelStatusSource.cs" Link="Runtime\S1CartelStatusSource.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.StoryPrep\StoryPrepBuilder.cs" Link="StoryPrep\StoryPrepBuilder.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.StoryPrep\StoryPrepFakes.cs" Link="StoryPrep\StoryPrepFakes.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.PostBenziesProof\PostBenziesProofRuntime.cs" Link="PostBenziesProof\PostBenziesProofRuntime.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\SyndicateHqContracts.cs" Link="Model\SyndicateHqContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\SyndicateHqIdentity.cs" Link="Model\SyndicateHqIdentity.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\SyndicateHqUnlockAdmission.cs" Link="Model\SyndicateHqUnlockAdmission.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\SyndicateHqEntryStateMachine.cs" Link="Model\SyndicateHqEntryStateMachine.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\SyndicateHqInteriorDefinition.cs" Link="Model\SyndicateHqInteriorDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\SyndicateHqInteriorOwnership.cs" Link="Model\SyndicateHqInteriorOwnership.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\SyndicateHqStorageContracts.cs" Link="Model\SyndicateHqStorageContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqDoorObserver.cs" Link="Runtime\SyndicateHqDoorObserver.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqHostContextAdapter.cs" Link="Runtime\SyndicateHqHostContextAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqInteriorRuntime.cs" Link="Runtime\SyndicateHqInteriorRuntime.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqRuntimeService.cs" Link="Runtime\SyndicateHqRuntimeService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqRuntimeComposition.cs" Link="Runtime\SyndicateHqRuntimeComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqNativeStorageRuntime.cs" Link="Runtime\SyndicateHqNativeStorageRuntime.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqNativeStorageBoundary.cs" Link="Runtime\SyndicateHqNativeStorageBoundary.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\SyndicateHqStorageLoadPatch.cs" Link="Runtime\SyndicateHqStorageLoadPatch.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1LockdownGateState.cs" Link="Runtime\Release1LockdownGateState.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1LockdownGateThrottle.cs" Link="Runtime\Release1LockdownGateThrottle.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1LockdownGatePatch.cs" Link="Runtime\Release1LockdownGatePatch.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1NpcRegistryDumpHarness.cs" Link="Runtime\Release1NpcRegistryDumpHarness.cs" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderNet6Path)\MelonLoader.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(Il2CppAssemblyPath)\Assembly-CSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="S1API">
+      <HintPath>$(ScheduleOnePath)\Mods\S1API.Il2Cpp.MelonLoader.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Il2CppScheduleOne.Core">
+      <HintPath>$(Il2CppAssemblyPath)\Il2CppScheduleOne.Core.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MelonLoaderNet6Path)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MelonLoaderNet6Path)\0Harmony.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Il2CppFishNet.Runtime">
+      <HintPath>$(Il2CppAssemblyPath)\Il2CppFishNet.Runtime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(Il2CppAssemblyPath)\Il2Cppmscorlib.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(Il2CppAssemblyPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(Il2CppAssemblyPath)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(Il2CppAssemblyPath)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(Il2CppAssemblyPath)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>$(Il2CppAssemblyPath)\UnityEngine.AIModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule">
+      <HintPath>$(Il2CppAssemblyPath)\UnityEngine.JSONSerializeModule.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressureTier.cs" Link="Model\LocalPressureTier.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressureReasonCode.cs" Link="Model\LocalPressureReasonCode.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressureProfile.cs" Link="Model\LocalPressureProfile.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressureState.cs" Link="Model\LocalPressureState.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressureEvidenceEvent.cs" Link="Model\LocalPressureEvidenceEvent.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressureTransitions.cs" Link="Model\LocalPressureTransitions.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressurePursuitAccumulator.cs" Link="Model\LocalPressurePursuitAccumulator.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\LocalPressureDecay.cs" Link="Model\LocalPressureDecay.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\CustodyEntryGate.cs" Link="Model\CustodyEntryGate.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\LocalPressureSaveEnvelope.cs" Link="Persistence\LocalPressureSaveEnvelope.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\LocalPressureSaveCodec.cs" Link="Persistence\LocalPressureSaveCodec.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\LocalPressureSavePath.cs" Link="Persistence\LocalPressureSavePath.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\LocalPressureStateStore.cs" Link="Persistence\LocalPressureStateStore.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\RuntimePropertyDefinition.cs" Link="Model\RuntimePropertyDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehousePoint.cs" Link="Model\FishWarehousePoint.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseBuildableFootprintDefinition.cs" Link="Model\FishWarehouseBuildableFootprintDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\IFishWarehouseNativePropertyReplayAdapter.cs" Link="Runtime\IFishWarehouseNativePropertyReplayAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehousePropertyReplayHost.cs" Link="Runtime\FishWarehousePropertyReplayHost.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseNativePropertyReplayAdapter.cs" Link="Runtime\FishWarehouseNativePropertyReplayAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\IFishWarehouseNativeEmployeeReplayAdapter.cs" Link="Runtime\IFishWarehouseNativeEmployeeReplayAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseEmployeeReplayHost.cs" Link="Runtime\FishWarehouseEmployeeReplayHost.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseNativeEmployeeReplayAdapter.cs" Link="Runtime\FishWarehouseNativeEmployeeReplayAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseInteriorShellDefinition.cs" Link="Model\FishWarehouseInteriorShellDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseInteriorRoomDefinition.cs" Link="Model\FishWarehouseInteriorRoomDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseInteriorClosureDefinition.cs" Link="Model\FishWarehouseInteriorClosureDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehousePropertyBoundsDefinition.cs" Link="Model\FishWarehousePropertyBoundsDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseLoadingDockDefinition.cs" Link="Model\FishWarehouseLoadingDockDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseFrontageClearanceDefinition.cs" Link="Model\FishWarehouseFrontageClearanceDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseEmployeeHomeDefinition.cs" Link="Model\FishWarehouseEmployeeHomeDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseEmployeeHomeAdoptionPlanner.cs" Link="Model\FishWarehouseEmployeeHomeAdoptionPlanner.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseOwnershipReconciler.cs" Link="Model\FishWarehouseOwnershipReconciler.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseEmployeeInfrastructureDefinition.cs" Link="Model\FishWarehouseEmployeeInfrastructureDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseEmployeePointLayoutValidation.cs" Link="Model\FishWarehouseEmployeePointLayoutValidation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseEmployeePlacementDefinition.cs" Link="Model\FishWarehouseEmployeePlacementDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseGarageOpeningDefinition.cs" Link="Model\FishWarehouseGarageOpeningDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseGarageOpeningSafetyDefinition.cs" Link="Model\FishWarehouseGarageOpeningSafetyDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseWallOpeningPlanner.cs" Link="Model\FishWarehouseWallOpeningPlanner.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseTransformSignatureDefinition.cs" Link="Model\FishWarehouseTransformSignatureDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseNativeNavigationDefinition.cs" Link="Model\FishWarehouseNativeNavigationDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseGarageCrossingDefinition.cs" Link="Model\FishWarehouseGarageCrossingDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseNativeNavigationAcceptanceDefinition.cs" Link="Model\FishWarehouseNativeNavigationAcceptanceDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseNativeNavigationResourceLedger.cs" Link="Model\FishWarehouseNativeNavigationResourceLedger.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\FishWarehouseEmployeeAgentTypeResolver.cs" Link="Model\FishWarehouseEmployeeAgentTypeResolver.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseManagementEligibilityDiagnostic.cs" Link="Runtime\FishWarehouseManagementEligibilityDiagnostic.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\RuntimePropertyLifecycleState.cs" Link="Runtime\RuntimePropertyLifecycleState.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\RuntimePropertyLifecycle.cs" Link="Runtime\RuntimePropertyLifecycle.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\RuntimePropertyHostResult.cs" Link="Runtime\RuntimePropertyHostResult.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseRuntimeService.cs" Link="Runtime\FishWarehouseRuntimeService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseDeliveryRestoreGate.cs" Link="Runtime\FishWarehouseDeliveryRestoreGate.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseDeliveryRestorePatch.cs" Link="Runtime\FishWarehouseDeliveryRestorePatch.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseDockDeliveryPopulationLatch.cs" Link="Runtime\FishWarehouseDockDeliveryPopulationLatch.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseDockOccupantRefreshPolicy.cs" Link="Runtime\FishWarehouseDockOccupantRefreshPolicy.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseContinuousNavigationCoordinator.cs" Link="Runtime\FishWarehouseContinuousNavigationCoordinator.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\IFishWarehouseNativeNavigationAdapter.cs" Link="Runtime\IFishWarehouseNativeNavigationAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseNativeNavigationBuildLifecycle.cs" Link="Runtime\FishWarehouseNativeNavigationBuildLifecycle.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseNativeNavigationHost.cs" Link="Runtime\FishWarehouseNativeNavigationHost.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\UnityNativeNavigationAdapter.cs" Link="Runtime\UnityNativeNavigationAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseSaveState.cs" Link="Persistence\FishWarehouseSaveState.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseReplayCheckpoint.cs" Link="Persistence\FishWarehouseReplayCheckpoint.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseSaveFolderKey.cs" Link="Persistence\FishWarehouseSaveFolderKey.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseSaveCodec.cs" Link="Persistence\FishWarehouseSaveCodec.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseSavePath.cs" Link="Persistence\FishWarehouseSavePath.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseSaveStore.cs" Link="Persistence\FishWarehouseSaveStore.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\IFishWarehousePropertySnapshotStore.cs" Link="Persistence\IFishWarehousePropertySnapshotStore.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehousePropertySnapshotStore.cs" Link="Persistence\FishWarehousePropertySnapshotStore.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseReplayLifecycle.cs" Link="Persistence\FishWarehouseReplayLifecycle.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehousePersistenceService.cs" Link="Persistence\FishWarehousePersistenceService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Persistence\FishWarehouseNativePropertySnapshotInspector.cs" Link="Persistence\FishWarehouseNativePropertySnapshotInspector.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehousePropertyCaptureService.cs" Link="Runtime\FishWarehousePropertyCaptureService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehousePropertyLoadCapturePatch.cs" Link="Runtime\FishWarehousePropertyLoadCapturePatch.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehouseNativePropertyWriteGuardPatch.cs" Link="Runtime\FishWarehouseNativePropertyWriteGuardPatch.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\FishWarehousePersistenceReplayService.cs" Link="Runtime\FishWarehousePersistenceReplayService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureRuntimeContracts.cs" Link="Runtime\LocalPressureRuntimeContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureRuntimeService.cs" Link="Runtime\LocalPressureRuntimeService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureRuntimeCensusObserver.cs" Link="Runtime\LocalPressureRuntimeCensusObserver.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureHostLifecycleAdapter.cs" Link="Runtime\LocalPressureHostLifecycleAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureHostLifecyclePolicies.cs" Link="Runtime\LocalPressureHostLifecyclePolicies.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureHostIdentity.cs" Link="Runtime\LocalPressureHostIdentity.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureRuntimeComposition.cs" Link="Runtime\LocalPressureRuntimeComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\NativeLawResponseModComposition.cs" Link="Runtime\NativeLawResponseModComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\NativeLawResponseContracts.cs" Link="Runtime\NativeLawResponseContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\NativeLawResponseAdmissionGate.cs" Link="Runtime\NativeLawResponseAdmissionGate.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\NativeLawResponseController.cs" Link="Runtime\NativeLawResponseController.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\NativeDispatchOutcomeEvaluator.cs" Link="Runtime\NativeDispatchOutcomeEvaluator.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\NativePoliceDispatchAdapter.cs" Link="Runtime\NativePoliceDispatchAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\PoliceCustodyEvidenceBridge.cs" Link="Runtime\PoliceCustodyEvidenceBridge.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\LocalPressureTierTransitionFanOut.cs" Link="Runtime\LocalPressureTierTransitionFanOut.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ChiefTierObserver.cs" Link="Runtime\Release1ChiefTierObserver.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\PoliceCustodyPatch.cs" Link="Runtime\PoliceCustodyPatch.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Model\Release1ChiefRecord.cs" Link="Model\Release1ChiefRecord.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ChiefLedger.cs" Link="Runtime\Release1ChiefLedger.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ChiefContracts.cs" Link="Runtime\Release1ChiefContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ChiefService.cs" Link="Runtime\Release1ChiefService.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ChiefPresentation.cs" Link="Runtime\Release1ChiefPresentation.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime\Runtime\Release1ChiefComposition.cs" Link="Runtime\Release1ChiefComposition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.Census\CensusRuntimePolicies.cs" Link="Runtime\CensusRuntimePolicies.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.PhoneCallProof\OcPhoneCallDefinition.cs" Link="PhoneCallProof\OcPhoneCallDefinition.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.PhoneCallProof\PhoneCallProofContracts.cs" Link="PhoneCallProof\PhoneCallProofContracts.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.PhoneCallProof\PhoneCallProofAdapter.cs" Link="PhoneCallProof\PhoneCallProofAdapter.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.PhoneCallProof\PhoneCallProofRuntime.cs" Link="PhoneCallProof\PhoneCallProofRuntime.cs" />
+    <Compile Include="..\..\tools\OrganizedCrime.PhoneCallProof\PhoneProofHostGate.cs" Link="PhoneCallProof\PhoneProofHostGate.cs" />
+  </ItemGroup>
+
+  <Target Name="StageS1ApiForTestHost" AfterTargets="Build">
+    <Copy
+      SourceFiles="$(ScheduleOnePath)\Mods\S1API.Il2Cpp.MelonLoader.dll"
+      DestinationFiles="$(TargetDir)S1API.dll"
+      SkipUnchangedFiles="true" />
+  </Target>
+</Project>

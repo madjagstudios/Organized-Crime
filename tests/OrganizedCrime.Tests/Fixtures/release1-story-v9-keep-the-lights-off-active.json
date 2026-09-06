@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 9,
+  "story": {
+    "playerId": "76561190000000001",
+    "standing": 20,
+    "relationshipState": "Accepted",
+    "release1Recognized": false,
+    "introLogicalCorrelationIds": [
+      "oc10/v1/76561190000000001/release1.intro/0/IntroAccepted/intro-1"
+    ],
+    "recognitionLogicalCorrelationIds": [],
+    "missions": [
+      {
+        "missionKey": "release1.small-courtesy",
+        "state": "Accepted",
+        "attempt": 1,
+        "termsVersion": "v1",
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "None",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": null,
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [
+          "effect-1"
+        ],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionAccepted/effect-authorize"
+        ],
+        "nativePresentationRef": null,
+        "revision": 0
+      },
+      {
+        "missionKey": "release1.wrong-address",
+        "state": "Active",
+        "attempt": 1,
+        "termsVersion": "wrong-address-v1",
+        "acceptedGameTimeHours": 5,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "None",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": null,
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/wa-authorize-1"
+        ],
+        "nativePresentationRef": null,
+        "revision": 0
+      },
+      {
+        "missionKey": "release1.room-with-no-name",
+        "state": "Locked",
+        "attempt": 1,
+        "termsVersion": null,
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "None",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": null,
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [],
+        "nativePresentationRef": null,
+        "revision": 0
+      },
+      {
+        "missionKey": "release1.short-notice",
+        "state": "Active",
+        "attempt": 1,
+        "termsVersion": "short-notice-v1",
+        "acceptedGameTimeHours": 5,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "None",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": null,
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.short-notice/1/MissionAccepted/sn-authorize-1"
+        ],
+        "nativePresentationRef": null,
+        "revision": 0
+      },
+      {
+        "missionKey": "release1.keep-the-lights-off",
+        "state": "Active",
+        "attempt": 1,
+        "termsVersion": "keep-the-lights-off-v1",
+        "acceptedGameTimeHours": 10,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "None",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": null,
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionAccepted/ktlo-authorize-1"
+        ],
+        "nativePresentationRef": null,
+        "revision": 0
+      },
+      {
+        "missionKey": "release1.the-envelope",
+        "state": "Locked",
+        "attempt": 1,
+        "termsVersion": null,
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "None",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": null,
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [],
+        "nativePresentationRef": null,
+        "revision": 0
+      }
+    ],
+    "nativeEffects": [
+      {
+        "effectId": "effect-1",
+        "missionKey": "release1.small-courtesy",
+        "attempt": 1,
+        "effectKind": "CargoTransfer",
+        "sourceIdentity": "source",
+        "destinationIdentity": "destination",
+        "amountOrCargoIdentity": "cargo",
+        "phase": "Prepared",
+        "nativeReceiptId": null,
+        "preparedStoryRevision": 0,
+        "committedStoryCorrelationId": null,
+        "authorizedStoryCorrelationId": "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionAccepted/effect-authorize",
+        "executionBlocked": false,
+        "authorizedMissionRevision": 0
+      }
+    ],
+    "phonePresentationAttempts": [],
+    "smallCourtesyAssignments": [],
+    "presentationReceipts": [],
+    "wrongAddressAssignments": [
+      {
+        "missionKey": "release1.wrong-address",
+        "attempt": 1,
+        "mode": "Primary",
+        "authorizationCorrelationId": "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/wa-authorize-1",
+        "productId": "product",
+        "productName": "Product",
+        "packagingId": "brick",
+        "packagingName": "Brick",
+        "packageQuantity": 1,
+        "sourceDropGuid": "drop-source-1",
+        "sourceDropName": "Source 1",
+        "sourceDropDescription": "A wrong address",
+        "sourceDropX": 1,
+        "sourceDropY": 2,
+        "sourceDropZ": 3,
+        "handoffDropGuid": "drop-handoff-1",
+        "handoffDropName": "Handoff 1",
+        "handoffDropDescription": "The right address",
+        "handoffDropX": 11,
+        "handoffDropY": 2,
+        "handoffDropZ": 3,
+        "rewardMultiplier": 1.25
+      }
+    ],
+    "wrongAddressProgress": [
+      {
+        "missionKey": "release1.wrong-address",
+        "attempt": 1,
+        "staged": true,
+        "custody": false
+      }
+    ],
+    "roomWithNoNameAssignments": [],
+    "roomWithNoNameProgress": [],
+    "shortNoticeAssignments": [
+      {
+        "missionKey": "release1.short-notice",
+        "attempt": 1,
+        "mode": "Primary",
+        "authorizationCorrelationId": "oc10/v1/76561190000000001/release1.short-notice/1/MissionAccepted/sn-authorize-1",
+        "productId": "product",
+        "productName": "Product",
+        "packagingId": "brick",
+        "packagingName": "Brick",
+        "requiredQuantity": 3,
+        "handoffDropGuid": "drop-handoff-1",
+        "handoffDropName": "Handoff 1",
+        "handoffDropDescription": "The right address.",
+        "handoffDropX": 1,
+        "handoffDropY": 2,
+        "handoffDropZ": 3,
+        "deadlineGameMinutes": 720,
+        "rewardMultiplier": 1.75,
+        "valueConvention": "PerUnit"
+      }
+    ],
+    "shortNoticeProgress": [
+      {
+        "missionKey": "release1.short-notice",
+        "attempt": 1,
+        "observedQuantity": 3,
+        "lastShortfallNoticed": null,
+        "spreadNoticed": false
+      }
+    ],
+    "keepTheLightsOffAssignments": [
+      {
+        "missionKey": "release1.keep-the-lights-off",
+        "attempt": 1,
+        "mode": "Primary",
+        "authorizationCorrelationId": "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionAccepted/ktlo-authorize-1",
+        "productId": "product",
+        "productName": "Product",
+        "askingPrice": 1000,
+        "expectedDropCount": 1,
+        "expectedClosetCount": 9,
+        "windowDurationGameMinutes": 1440,
+        "deadlineGameMinutes": 4320,
+        "rewardMultiplier": 2
+      }
+    ],
+    "keepTheLightsOffProgress": [
+      {
+        "missionKey": "release1.keep-the-lights-off",
+        "attempt": 1,
+        "clearConfirmedAtGameMinutes": 100,
+        "breachSincePassGameMinutes": null
+      }
+    ],
+    "theEnvelopeAssignments": [],
+    "theEnvelopeProgress": [],
+    "revision": 0
+  }
+}

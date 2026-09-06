@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>OrganizedCrime.Census</AssemblyName>
+    <RootNamespace>OrganizedCrime.Census</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ScheduleOnePath Condition="'$(ScheduleOnePath)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Schedule I</ScheduleOnePath>
+    <Il2CppAssemblyPath Condition="Exists('$(ScheduleOnePath)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll')">$(ScheduleOnePath)\MelonLoader\Il2CppAssemblies</Il2CppAssemblyPath>
+    <GameAssemblyPath Condition="'$(Il2CppAssemblyPath)' != ''">$(Il2CppAssemblyPath)</GameAssemblyPath>
+    <GameAssemblyPath Condition="'$(GameAssemblyPath)' == ''">$(ScheduleOnePath)\Schedule I_Data\Managed</GameAssemblyPath>
+    <MelonLoaderNet6Path>$(ScheduleOnePath)\MelonLoader\net6</MelonLoaderNet6Path>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\oc-30-runtime-census\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\OrganizedCrime\Runtime\LocalPressureRuntimeCensusObserver.cs" Link="LocalPressureRuntimeCensusObserver.cs" />
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderNet6Path)\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MelonLoaderNet6Path)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameAssemblyPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppScheduleOne.Core">
+      <HintPath>$(GameAssemblyPath)\Il2CppScheduleOne.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(GameAssemblyPath)\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppFishNet.Runtime">
+      <HintPath>$(GameAssemblyPath)\Il2CppFishNet.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameAssemblyPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="S1API.Il2Cpp.MelonLoader">
+      <HintPath>$(ScheduleOnePath)\Mods\S1API.Il2Cpp.MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

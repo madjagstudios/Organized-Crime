@@ -1,0 +1,5 @@
+# Keep line endings stable across platforms; one test pins Mod.cs by its exact bytes.
+* text=auto eol=lf
+*.png binary
+*.dll binary
+*.zip binary

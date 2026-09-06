@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>OrganizedCrime.PostBenziesProof</AssemblyName>
+    <RootNamespace>OrganizedCrime.PostBenziesProof</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <ScheduleOnePath Condition="'$(ScheduleOnePath)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Schedule I</ScheduleOnePath>
+    <MelonLoaderNet6Path>$(ScheduleOnePath)\MelonLoader\net6</MelonLoaderNet6Path>
+    <Il2CppAssemblyPath>$(ScheduleOnePath)\MelonLoader\Il2CppAssemblies</Il2CppAssemblyPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\oc-50-post-benzies-proof\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrganizedCrime\OrganizedCrime.csproj" />
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderNet6Path)\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppScheduleOne.Core">
+      <HintPath>$(Il2CppAssemblyPath)\Il2CppScheduleOne.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(Il2CppAssemblyPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
