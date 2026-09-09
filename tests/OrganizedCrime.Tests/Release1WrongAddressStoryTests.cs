@@ -182,7 +182,7 @@ public sealed class Release1WrongAddressStoryTests
         assignment = Assignment(Release1WrongAddressAssignmentMode.Primary, 1, command.CorrelationId, "brick");
         Assert.Equal(Release1StoryCommandStatus.Rejected, harness.Service.TryExecuteWrongAddressAcceptanceDurably(command, assignment).Status);
 
-        command = harness.Command(Release1TransitionKind.MissionAccepted, "wrong-identity", terms: TermsVersion) with { PlayerId = "76561197984645370" };
+        command = harness.Command(Release1TransitionKind.MissionAccepted, "wrong-identity", terms: TermsVersion) with { PlayerId = "76561190000000002" };
         assignment = Assignment(Release1WrongAddressAssignmentMode.Primary, 1, command.CorrelationId, "brick");
         Assert.Equal(Release1StoryCommandStatus.Rejected, harness.Service.TryExecuteWrongAddressAcceptanceDurably(command, assignment).Status);
 

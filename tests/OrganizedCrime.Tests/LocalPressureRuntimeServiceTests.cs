@@ -149,7 +149,7 @@ public sealed class LocalPressureRuntimeServiceTests
         var adapter = new FakeHostAdapter
         {
             CanonicalHostIdentity = "76561190000000001",
-            Players = new[] { FakeHostAdapter.SinglePlayer("76561197984645370") },
+            Players = new[] { FakeHostAdapter.SinglePlayer("76561190000000002") },
             Clock = FakeHostAdapter.CreateClock(120)
         };
         var repository = new FakeRepository();
@@ -162,7 +162,7 @@ public sealed class LocalPressureRuntimeServiceTests
         Assert.Equal(LocalPressureRuntimePhase.Quarantined, service.Phase);
         Assert.Equal(LocalPressureRuntimeRejectReason.IdentityAmbiguous, service.LastRejectReason);
         Assert.False(service.TryGetState("76561190000000001", out _));
-        Assert.False(service.TryGetState("76561197984645370", out _));
+        Assert.False(service.TryGetState("76561190000000002", out _));
         Assert.Equal(0, repository.UpdateCalls);
     }
 

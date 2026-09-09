@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: Nell's first offer now arrives within seconds of the cartel's defeat, even when it happens mid-session. Before, the check ran once at load, so a player who beat the cartel and kept playing never got the offer until they quit to the menu and loaded the save again.
+
 ## 1.0.0
 
 First public release.

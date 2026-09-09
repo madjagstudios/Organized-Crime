@@ -78,6 +78,148 @@ public sealed class Release1TransitionPublisherServiceTests
     }
 
     [Fact]
+    public void Locked_read_ends_observation_but_a_later_unlocked_read_shows_the_prompt_in_the_same_load_cycle()
+    {
+        var now = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+        var harness = new Harness(
+            Read(Release1PostBenziesUnlockReadStatus.Locked),
+            Read(Release1PostBenziesUnlockReadStatus.Locked),
+            Read(Release1PostBenziesUnlockReadStatus.Unlocked));
+        using var publisher = harness.CreatePublisher(() => now);
+
+        publisher.OnLoadComplete();
+        publisher.Update();
+        Assert.False(publisher.EligibilityObserving);
+        Assert.False(publisher.PromptVisible);
+        Assert.Equal(1, harness.Reader.ReadCount);
+
+        // The watch polls on its own interval, slower than the observation poll.
+        now = now.AddSeconds(1);
+        publisher.Update();
+        Assert.Equal(1, harness.Reader.ReadCount);
+
+        now = now.AddSeconds(4);
+        publisher.Update();
+        Assert.Equal(2, harness.Reader.ReadCount);
+        Assert.False(publisher.PromptVisible);
+
+        now = now.AddSeconds(5);
+        publisher.Update();
+        Assert.Equal(3, harness.Reader.ReadCount);
+        Assert.True(publisher.PromptVisible);
+        Assert.False(publisher.EligibilityObserving);
+
+        // Once eligible the watch stops reading.
+        now = now.AddSeconds(5);
+        publisher.Update();
+        Assert.Equal(3, harness.Reader.ReadCount);
+    }
+
+    [Fact]
+    public void Watch_outlives_the_observation_deadline()
+    {
+        var now = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+        var harness = new Harness(
+            Read(Release1PostBenziesUnlockReadStatus.Locked),
+            Read(Release1PostBenziesUnlockReadStatus.Unlocked));
+        using var publisher = harness.CreatePublisher(() => now);
+
+        publisher.OnLoadComplete();
+        publisher.Update();
+
+        now = now.AddMinutes(30); // far past the 10 s harness deadline
+        publisher.Update();
+
+        Assert.True(publisher.PromptVisible);
+        Assert.Equal(2, harness.Reader.ReadCount);
+    }
+
+    [Fact]
+    public void Deadline_still_ends_a_pending_observation_without_starting_a_watch()
+    {
+        var now = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+        var harness = new Harness(Read(Release1PostBenziesUnlockReadStatus.Pending));
+        using var publisher = harness.CreatePublisher(() => now);
+
+        publisher.OnLoadComplete();
+        publisher.Update();
+        Assert.Equal(1, harness.Reader.ReadCount);
+
+        now = now.AddSeconds(11);
+        publisher.Update();
+        Assert.False(publisher.EligibilityObserving);
+        var readsAtDeadline = harness.Reader.ReadCount;
+
+        now = now.AddMinutes(5);
+        publisher.Update();
+        Assert.Equal(readsAtDeadline, harness.Reader.ReadCount);
+        Assert.False(publisher.PromptVisible);
+    }
+
+    [Fact]
+    public void Preload_ends_the_watch()
+    {
+        var now = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+        var harness = new Harness(
+            Read(Release1PostBenziesUnlockReadStatus.Locked),
+            Read(Release1PostBenziesUnlockReadStatus.Unlocked));
+        using var publisher = harness.CreatePublisher(() => now);
+
+        publisher.OnLoadComplete();
+        publisher.Update();
+        publisher.OnPreLoad();
+
+        now = now.AddSeconds(10);
+        publisher.Update();
+
+        Assert.Equal(1, harness.Reader.ReadCount);
+        Assert.False(publisher.PromptVisible);
+    }
+
+    [Fact]
+    public void Faulted_read_ends_observation_without_a_watch()
+    {
+        var now = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+        var harness = new Harness(
+            Read(Release1PostBenziesUnlockReadStatus.Faulted),
+            Read(Release1PostBenziesUnlockReadStatus.Unlocked));
+        using var publisher = harness.CreatePublisher(() => now);
+
+        publisher.OnLoadComplete();
+        publisher.Update();
+
+        now = now.AddSeconds(10);
+        publisher.Update();
+
+        Assert.Equal(1, harness.Reader.ReadCount);
+        Assert.False(publisher.PromptVisible);
+    }
+
+    [Fact]
+    public void Watch_reaching_unlocked_in_the_accepted_state_publishes_the_intro_call_once()
+    {
+        var now = new DateTime(2026, 9, 9, 12, 0, 0, DateTimeKind.Utc);
+        var harness = new Harness(
+            AcceptedState(),
+            Read(Release1PostBenziesUnlockReadStatus.Locked),
+            Read(Release1PostBenziesUnlockReadStatus.Unlocked));
+        using var publisher = harness.CreatePublisher(() => now);
+
+        publisher.OnLoadComplete();
+        publisher.Update();
+        Assert.Empty(harness.Queue.Requests);
+
+        now = now.AddSeconds(5);
+        publisher.Update();
+        Assert.Single(harness.Queue.Requests);
+        Assert.False(publisher.PromptVisible);
+
+        now = now.AddSeconds(5);
+        publisher.Update();
+        Assert.Single(harness.Queue.Requests);
+    }
+
+    [Fact]
     public void Accept_persists_the_intro_revision_before_the_phone_boundary_is_invoked()
     {
         var harness = new Harness(Read(Release1PostBenziesUnlockReadStatus.Unlocked));
@@ -349,6 +491,7 @@ public sealed class Release1TransitionPublisherServiceTests
             utcNow: now,
             deadline: TimeSpan.FromSeconds(10),
             pollInterval: TimeSpan.FromSeconds(1),
+            watchInterval: TimeSpan.FromSeconds(5),
             publishIntroCall: publishIntroCall);
     }
 

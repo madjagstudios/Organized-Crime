@@ -14,6 +14,7 @@ public sealed class Release1TransitionPublisherService : IDisposable
     };
     private static readonly TimeSpan DefaultDeadline = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan DefaultWatchInterval = TimeSpan.FromSeconds(5);
 
     private readonly IRelease1PostBenziesUnlockReader _reader;
     private readonly Release1StoryRuntimeService _story;
@@ -22,11 +23,13 @@ public sealed class Release1TransitionPublisherService : IDisposable
     private readonly Func<DateTime> _utcNow;
     private readonly TimeSpan _deadline;
     private readonly TimeSpan _pollInterval;
+    private readonly TimeSpan _watchInterval;
     private readonly bool _publishIntroCall;
     private DateTime _startedUtc;
     private DateTime _nextPollUtc;
     private bool _loadCycleActive;
     private bool _observing;
+    private bool _watching;
     private bool _hasEligibleContext;
     private Release1StoryHostContextSnapshot _eligibleContext;
     private bool _phoneAttemptedThisEpoch;
@@ -40,7 +43,8 @@ public sealed class Release1TransitionPublisherService : IDisposable
         Func<DateTime>? utcNow = null,
         TimeSpan? deadline = null,
         TimeSpan? pollInterval = null,
-        bool publishIntroCall = true)
+        bool publishIntroCall = true,
+        TimeSpan? watchInterval = null)
     {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _story = story ?? throw new ArgumentNullException(nameof(story));
@@ -49,9 +53,11 @@ public sealed class Release1TransitionPublisherService : IDisposable
         _utcNow = utcNow ?? (() => DateTime.UtcNow);
         _deadline = deadline ?? DefaultDeadline;
         _pollInterval = pollInterval ?? DefaultPollInterval;
+        _watchInterval = watchInterval ?? DefaultWatchInterval;
         _publishIntroCall = publishIntroCall;
         if (_deadline <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(deadline));
         if (_pollInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(pollInterval));
+        if (_watchInterval <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(watchInterval));
     }
 
     public bool PromptVisible { get; private set; }
@@ -61,6 +67,11 @@ public sealed class Release1TransitionPublisherService : IDisposable
     /// times out, or <see cref="OnPreLoad"/> runs. Callers building presentation inputs while this is
     /// true should treat the decision as still undetermined, since <see cref="PromptVisible"/> can be
     /// false during this window even though the intro decision is desired.
+    ///
+    /// This stays bounded on purpose: the projector skips decision reconciliation while it is true.
+    /// A <c>Locked</c> result ends the observation but starts a slower watch for the rest of the load
+    /// cycle (OC-79), which is not reported here because the decision is then determined: not offered
+    /// yet, and re-evaluated when the cartel status flips.
     /// </summary>
     public bool EligibilityObserving => _observing;
 
@@ -76,12 +87,14 @@ public sealed class Release1TransitionPublisherService : IDisposable
         _eligibleContext = default;
         _phoneAttemptedThisEpoch = false;
         _observing = true;
+        _watching = false;
     }
 
     public void OnPreLoad()
     {
         _loadCycleActive = false;
         _observing = false;
+        _watching = false;
         PromptVisible = false;
         _hasEligibleContext = false;
         _eligibleContext = default;
@@ -90,22 +103,25 @@ public sealed class Release1TransitionPublisherService : IDisposable
 
     public void Update()
     {
-        if (_disposed || !_observing) return;
+        if (_disposed || !(_observing || _watching)) return;
         var now = _utcNow();
-        if (now - _startedUtc >= _deadline)
+        if (_observing && now - _startedUtc >= _deadline)
         {
             _observing = false;
             return;
         }
         if (now < _nextPollUtc) return;
-        _nextPollUtc = now + _pollInterval;
+        _nextPollUtc = now + (_observing ? _pollInterval : _watchInterval);
 
         if (_story.Phase == Release1StoryRuntimePhase.AwaitingLoad)
             _story.OnLoadComplete();
         if (!_story.TryGetActiveContext(out var activeContext, out var rejectReason))
         {
             if (rejectReason is Release1StoryRuntimeRejectReason.Quarantined or Release1StoryRuntimeRejectReason.Disposed)
+            {
                 _observing = false;
+                _watching = false;
+            }
             return;
         }
 
@@ -116,6 +132,7 @@ public sealed class Release1TransitionPublisherService : IDisposable
         {
             _log($"Release 1 eligibility observation faulted: {exception.GetType().Name}");
             _observing = false;
+            _watching = false;
             return;
         }
 
@@ -123,8 +140,26 @@ public sealed class Release1TransitionPublisherService : IDisposable
             return;
 
         _observing = false;
+        if (status == Release1PostBenziesUnlockReadStatus.Locked)
+        {
+            // The cartel is readable and not yet defeated. Keep a slow watch for the rest of the load
+            // cycle: Unlocked is a one-way transition, and a player who defeats the cartel mid-session
+            // must be offered the intro without reloading (OC-79). The deadline above bounds only the
+            // undetermined observation; the watch has none.
+            if (!_watching)
+            {
+                _watching = true;
+                _nextPollUtc = now + _watchInterval;
+            }
+            return;
+        }
+
+        var resolvedByWatch = _watching;
+        _watching = false;
         if (status != Release1PostBenziesUnlockReadStatus.Unlocked || snapshot.CartelStatus != Release1CartelStatus.Defeated || !SameContext(activeContext, snapshot.HostContext))
             return;
+        if (resolvedByWatch)
+            _log("Release 1 eligibility watch observed the cartel defeated mid-session.");
 
         _eligibleContext = snapshot.HostContext;
         _hasEligibleContext = true;

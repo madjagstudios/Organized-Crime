@@ -240,7 +240,7 @@ public sealed class SyndicateHqNativeStorageRuntimeTests
 
         var changed = runtime.BeginLoad(ReadyContext() with
         {
-            CanonicalPlayerId = "76561197984645368"
+            CanonicalPlayerId = "76561190000000004"
         });
 
         Assert.Equal(SyndicateHqStorageStatus.SaveBindingChanged, changed.Status);

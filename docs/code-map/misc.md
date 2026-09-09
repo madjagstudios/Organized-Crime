@@ -6,6 +6,7 @@ Top-level paths not covered by any declared area (assign them in annotations.yam
 
 | Path | Files |
 |---|---|
+| .gitattributes | 1 |
 | .gitignore | 1 |
 | LICENSE/ | 1 |
 | README.md | 1 |

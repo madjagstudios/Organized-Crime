@@ -1,7 +1,7 @@
 <#
 Builds the Thunderstore package for Organized Crime.
 
-Output: dist\OrganizedCrime-<version>.zip containing
+Output: dist\MadJagStudios-OrganizedCrime-<version>.zip containing
   manifest.json, README.md, CHANGELOG.md, icon.png at the root and Mods\OrganizedCrime.dll,
 the layout Thunderstore expects for a MelonLoader mod. The same zip is what Nexus takes.
 
@@ -54,7 +54,7 @@ foreach ($name in @("manifest.json", "README.md", "CHANGELOG.md", "icon.png")) {
 }
 Copy-Item $dll (Join-Path $staging "Mods\OrganizedCrime.dll")
 
-$zipPath = Join-Path $dist "OrganizedCrime-$version.zip"
+$zipPath = Join-Path $dist "MadJagStudios-OrganizedCrime-$version.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem

@@ -69,7 +69,7 @@ public sealed class SyndicateHqContractTests
         var intro = Release1LogicalCorrelation.Create(PlayerId, Release1MissionCatalog.IntroScopeKey, 0, Release1TransitionKind.IntroAccepted, "intro").Value;
         var recognition = Release1LogicalCorrelation.Create(PlayerId, Release1MissionCatalog.IntroScopeKey, 0, Release1TransitionKind.Release1Recognized, "recognition").Value;
         var story = Release1StoryState.CreateAccepted(PlayerId, intro) with { Release1Recognized = true, RecognitionLogicalCorrelationIds = new[] { recognition } };
-        var context = new Release1StoryHostContextSnapshot(Guid.NewGuid(), 1, "76561197984645360", @"C:\Saves\76561190000000001\SaveGame_4");
+        var context = new Release1StoryHostContextSnapshot(Guid.NewGuid(), 1, "76561190000000003", @"C:\Saves\76561190000000001\SaveGame_4");
 
         Assert.False(SyndicateHqUnlockAdmission.Evaluate(Release1StoryHostContextReadStatus.Ready, context, story).IsUnlocked);
     }
@@ -101,7 +101,7 @@ public sealed class SyndicateHqContractTests
     public void UnlockRejectsWrongAddressSatisfiedWhenPlayerIdMismatches()
     {
         var story = WithWrongAddressState(AcceptedStory(PlayerId), Release1MissionState.Satisfied);
-        var context = new Release1StoryHostContextSnapshot(Guid.NewGuid(), 1, "76561197984645360", @"C:\Saves\76561190000000001\SaveGame_4");
+        var context = new Release1StoryHostContextSnapshot(Guid.NewGuid(), 1, "76561190000000003", @"C:\Saves\76561190000000001\SaveGame_4");
 
         Assert.False(SyndicateHqUnlockAdmission.Evaluate(Release1StoryHostContextReadStatus.Ready, context, story).IsUnlocked);
     }

@@ -64,48 +64,13 @@ The report separates runtime `FACT`-style observations from the
 `INTERPRETATION` that callback order remains unknown. A menu opening is a
 vanilla behavior observation; it is not treated as a harness mutation.
 
-## Retained corrected owner result
+## Result
 
-The owner completed the corrected bounded run and retained it in a local
-evidence archive. The evidence pins:
-
-- corrected HEAD
-  `f54f88f1f1cb39ac636aa26320a11178a6bd93c7`;
-- installed Debug DLL SHA-256
-  `E286DEA3BACC877374222C3FC2D389BBE6ED4A1221CECADBE17D211647976D75`;
-- text receipt SHA-256
-  `EAC64EDEB3A6AE5CF1249F70456044C49260B9064DD12B87795E6BA216715E9E`;
-- JSON receipt SHA-256
-  `16CE32CF4C277A478AD157CCF9A386442C87564701B23B8337D45D2D4BEFA5BB`;
-- final log SHA-256
-  `5AA6385A2D0E281D605FF16B2EF8B9B39574A7216D5CDC72FA40DE8E6825AA45`.
-
-The run had `Host` authority and two exact candidates. It captured the same
-exact door at `4.269s` and `8.870s`, ordinals `1` and `2`, with
-`DuplicateInteractionTested: true`. Listener teardown completed, vanilla
-invariants were unchanged, and no mutation, Harmony, scene change, or
-PropertyProbe exception/error was recorded. The pre/post `SaveGame_4`
-snapshots each contain 35 files with zero byte differences. The temporary
-DLL was removed from the game and retained recoverably under the evidence
-root's `removed-after-run` directory.
-
-The formal receipt remains **INCONCLUSIVE solely because no `NPCSummonMenu`
-surface was available**: `MenuOutcome: NotObserved` and
-`MenuSurfaceObserved: false`. This does not prove the menu never exists, and
-callback order remains unknown. The product/architecture result is **PASS for
-the exact-door event seam**. Native `NPCSummonMenu` remains
-unproven/unavailable and is not an R1 dependency; the OC-owned `Enter Syndicate
-HQ` fallback presentation is primary.
-
-No further OC-47 gameplay run is required. OC-47 is ready for final evidence
-review and owner-authorized merge/closeout. Successor work is HQ
-entry/interior implementation, not more event-seam research.
-
-## Retention
-
-The owner must retain the text/JSON receipts and the exact build, extraction,
-index, API, DLL, and disposable-save hashes for independent review. The first
-INCONCLUSIVE polling-seam run remains part of the history; the corrected
-rerun does not overwrite it. Repository closeout does not authorize another
-installation/game launch, save mutation, merge, push, Jira close, or
-branch/worktree removal.
+The corrected bounded run captured the same exact door twice, at 4.269 s and
+8.870 s, with the duplicate-interaction check exercised, listener teardown
+completed, vanilla invariants unchanged, and no mutation, Harmony patch, scene
+change, or PropertyProbe error recorded. The formal receipt is INCONCLUSIVE
+only because no `NPCSummonMenu` surface appeared, so callback order is still
+unknown; the exact-door event seam itself passed. The mod's own `Enter
+Syndicate HQ` prompt is the primary presentation and does not depend on that
+menu.

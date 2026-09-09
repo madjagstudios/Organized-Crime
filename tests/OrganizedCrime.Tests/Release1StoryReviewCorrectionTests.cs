@@ -56,7 +56,7 @@ public sealed class Release1StoryReviewCorrectionTests
         command = IntroCommand() with { LoadEpoch = 999 };
         result = harness.Service.TryExecute(command);
         Assert.Equal(Release1StoryRuntimeRejectReason.WrongEpoch, result.RejectReason);
-        command = IntroCommand() with { PlayerId = "76561197984645370" };
+        command = IntroCommand() with { PlayerId = "76561190000000002" };
         result = harness.Service.TryExecute(command);
         Assert.Equal(Release1StoryRuntimeRejectReason.IdentityMismatch, result.RejectReason);
     }
@@ -151,7 +151,7 @@ public sealed class Release1StoryReviewCorrectionTests
     {
         var valid = IntroCorrelation("intro");
         Assert.Throws<ArgumentException>(() => new Release1StoryState(Player, 20, Release1RelationshipState.Accepted, false, new[] { valid }, Array.Empty<string>(),
-            Release1MissionCatalog.All.Select((m, i) => new Release1MissionRecord(m.MissionKey, i == 0 ? Release1MissionState.Offered : Release1MissionState.Locked, 1, null, null, null, Release1MissionOutcome.None, 0, Array.Empty<string>(), 0, Release1RecoveryMode.None, null, false, Array.Empty<string>(), Array.Empty<string>(), new[] { Release1LogicalCorrelation.Create("76561197984645370", m.MissionKey, 1, Release1TransitionKind.MissionAccepted, "wrong").Value }, null, 0)).ToArray(), Array.Empty<Release1NativeEffectJournalEntry>(), 0));
+            Release1MissionCatalog.All.Select((m, i) => new Release1MissionRecord(m.MissionKey, i == 0 ? Release1MissionState.Offered : Release1MissionState.Locked, 1, null, null, null, Release1MissionOutcome.None, 0, Array.Empty<string>(), 0, Release1RecoveryMode.None, null, false, Array.Empty<string>(), Array.Empty<string>(), new[] { Release1LogicalCorrelation.Create("76561190000000002", m.MissionKey, 1, Release1TransitionKind.MissionAccepted, "wrong").Value }, null, 0)).ToArray(), Array.Empty<Release1NativeEffectJournalEntry>(), 0));
     }
 
     [Fact]

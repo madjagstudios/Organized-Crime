@@ -36,8 +36,18 @@
   Chief.
 - **OC-74** (under OC-67) and **OC-68**: the forced Wanted rungs and Federal Heat, Release 2.
 
+## Fixed on main since 1.0.0, not yet packaged
+
+- **OC-79** (2026-09-09, from a Nexus report): the Nell intro never arrived when the cartel was
+  defeated mid-session. The eligibility check ran once, about a second after load, and latched off on
+  a not-yet-defeated cartel; only quitting to the menu and reloading re-armed it, and sleeping did not
+  help because S1API's `OnLoadComplete` is bound to `LoadManager`, not `SaveManager`. A `Locked`
+  result now starts a 5 s watch for the rest of the session. Proven live on slot 1: watch line 80 s
+  after load, offer without a reload. Whether a
+  natural Benzies defeat completes `Quest_DefeatCartel` at all is OC-80, still open.
+
 ## Not in this release
 
-Every item the 2026-09-05 feature inventory marks Designed only or Partly built: Chapters 3
-through 6, all three story endings, property raids, laying low, police corruption, Federal Heat,
-and syndicate services consuming capacity.
+Every item the 2026-09-05 feature inventory (`docs/reviews/2026-09-05-feature-inventory.md`) marks
+Designed only or Partly built: Chapters 3 through 6, all three story endings, property raids, laying
+low, police corruption, Federal Heat, and syndicate services consuming capacity.

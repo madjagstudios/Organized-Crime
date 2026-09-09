@@ -108,7 +108,7 @@ public sealed class SyndicateHqStorageContractTests
     [InlineData(true, "not-a-steam-id", SaveFolder, SaveFolder, SyndicateHqStorageStatus.NotCanonicalHost)]
     [InlineData(true, PlayerId, "not-a-save-folder", SaveFolder, SyndicateHqStorageStatus.SaveBindingChanged)]
     [InlineData(true, PlayerId, SaveFolder, @"C:\Saves\76561190000000001\SaveGame_3", SyndicateHqStorageStatus.SaveBindingChanged)]
-    [InlineData(true, "76561197984645360", SaveFolder, SaveFolder, SyndicateHqStorageStatus.SaveBindingChanged)]
+    [InlineData(true, "76561190000000003", SaveFolder, SaveFolder, SyndicateHqStorageStatus.SaveBindingChanged)]
     public void Invalid_authority_or_save_binding_fails_closed(
         bool isCanonicalHost,
         string playerId,

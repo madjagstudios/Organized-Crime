@@ -36,7 +36,7 @@ public sealed class Release1StoryIdentityTests
     {
         Assert.Equal(
             Release1StoryHostContextReadStatus.AmbiguousIdentity,
-            Release1StoryHostIdentity.Resolve(@"C:\game\Saves\76561190000000001\SaveGame_test", "76561197984645370", out _));
+            Release1StoryHostIdentity.Resolve(@"C:\game\Saves\76561190000000001\SaveGame_test", "76561190000000002", out _));
         Assert.Equal(
             Release1StoryHostContextReadStatus.AmbiguousIdentity,
             Release1StoryHostIdentity.Resolve(@"C:\game\Saves\not-steam\SaveGame_test", "76561190000000001", out _));

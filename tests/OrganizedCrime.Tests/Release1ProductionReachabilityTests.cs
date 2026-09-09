@@ -27,14 +27,14 @@ public sealed class Release1ProductionReachabilityTests
     // than invent a second, parallel result type, this adds one more member, NeedsOptionB, to the
     // same shared enum, so the constant is re-pinned once more here, same convention.
     private const string WrongAddressStagingHarnessAe43a07Sha256 =
-        "26C0C34F70C409FAF26D456C06EA0AABC32A1CF0CB6E9A0CDD12E4A17B3FD108";
+        "7785CC20083E076419F6B3142115F2ABCFA983D3D465624F5AB4A58EE529B5E2";
 
     // Recorded by SHA-256 straight off tools/OrganizedCrime/Runtime/Release1ShortNoticeQuantityHarness.cs
     // at commit 739a88b (its last owning commit, "widen the slot decrement and prove it with a
     // quantity harness"). Task 7 never touches this file; this guard follows the same byte-identity
     // pattern the Wrong Address staging harness guard above already establishes.
     private const string ShortNoticeQuantityHarness739a88bSha256 =
-        "A3DE6409E64138EF6E556F6904D7749435BDBB8320BCCCAC7ED7E587C79F7C81";
+        "F4C86B448536DBB5AACAC7B83C58FF3343975E8DCDFACCD9FEA150AA721F6523";
 
     // Recorded by SHA-256 straight off tools/OrganizedCrime/Mod.cs once OC-10 landed. OC-10 routes
     // every discarded Release1StoryRuntimeService lifecycle result (OnPreLoad, OnLoadComplete,
@@ -159,10 +159,10 @@ public sealed class Release1ProductionReachabilityTests
     // opens this branch); OC-60's tasks never touch these owner QA harness files, so their content at
     // 66a60ae and their content now must be byte-identical.
     private const string RoomWithNoNameHoldRoomHarness66a60aeSha256 =
-        "41CB2F06B139FEAB3309F4FA4BC9419A1210F7F567D602D0A7BCBA9967C70162";
+        "099D593891029DD2DC61C77E0B7BA2CD9137B0FECEAB76AECDFC5D11F052AE54";
 
     private const string ShortNoticeQuantityHarness66a60aeSha256 =
-        "A3DE6409E64138EF6E556F6904D7749435BDBB8320BCCCAC7ED7E587C79F7C81";
+        "F4C86B448536DBB5AACAC7B83C58FF3343975E8DCDFACCD9FEA150AA721F6523";
 
     // Recorded by SHA-256 straight off tools/OrganizedCrime/Runtime/Release1TheEnvelopeCashGateHarness.cs
     // at commit 4f95ad3 (the "draft the envelope closet deposit spec" commit that opens this branch,
@@ -171,7 +171,7 @@ public sealed class Release1ProductionReachabilityTests
     // 4f95ad3 and its content now must be byte-identical, the same pattern the harness guards above
     // already establish.
     private const string EnvelopeCashGateHarness4f95ad3Sha256 =
-        "8039F222B067E650E2284119219266684DCF8C4AEA83CE61B2314BCF64A05BCF";
+        "47427B2AFC8CB36F9B62641824A54CDD84CAA3B0CA0F848ED77F8096CFE9B63D";
 
     [Fact]
     public void Production_composition_exposes_the_reviewed_reader_story_phone_and_prompt_path()
@@ -469,15 +469,32 @@ public sealed class Release1ProductionReachabilityTests
     public void The_dead_drop_cash_gate_harness_is_unchanged_since_its_owning_commit()
     {
         var root = FindRepositoryRoot();
-        var bytes = File.ReadAllBytes(Path.Combine(root, "tools", "OrganizedCrime", "Runtime", "Release1TheEnvelopeCashGateHarness.cs"));
+        var bytes = ReadLineEndingNormalizedBytes(Path.Combine(root, "tools", "OrganizedCrime", "Runtime", "Release1TheEnvelopeCashGateHarness.cs"));
         Assert.Equal(EnvelopeCashGateHarness4f95ad3Sha256, Convert.ToHexString(SHA256.HashData(bytes)), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The pinned hashes are over LF content, which is what git stores for these files and what every
+    /// clone outside a CRLF-converting Windows checkout sees. Normalising here keeps the pins guarding
+    /// harness drift without also guarding the line-ending convention of whoever runs the tests.
+    /// </summary>
+    private static byte[] ReadLineEndingNormalizedBytes(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        var normalized = new List<byte>(bytes.Length);
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            if (bytes[i] == (byte)'\r' && i + 1 < bytes.Length && bytes[i + 1] == (byte)'\n') continue;
+            normalized.Add(bytes[i]);
+        }
+        return normalized.ToArray();
     }
 
     [Fact]
     public void Wrong_address_staging_harness_is_unchanged_since_its_last_owning_commit()
     {
         var root = FindRepositoryRoot();
-        var bytes = File.ReadAllBytes(Path.Combine(root, "tools", "OrganizedCrime", "Runtime", "Release1WrongAddressStagingHarness.cs"));
+        var bytes = ReadLineEndingNormalizedBytes(Path.Combine(root, "tools", "OrganizedCrime", "Runtime", "Release1WrongAddressStagingHarness.cs"));
         var hash = Convert.ToHexString(SHA256.HashData(bytes));
         Assert.Equal(WrongAddressStagingHarnessAe43a07Sha256, hash, StringComparer.OrdinalIgnoreCase);
     }
@@ -486,7 +503,7 @@ public sealed class Release1ProductionReachabilityTests
     public void Short_notice_quantity_harness_is_unchanged_since_its_last_owning_commit()
     {
         var root = FindRepositoryRoot();
-        var bytes = File.ReadAllBytes(Path.Combine(root, "tools", "OrganizedCrime", "Runtime", "Release1ShortNoticeQuantityHarness.cs"));
+        var bytes = ReadLineEndingNormalizedBytes(Path.Combine(root, "tools", "OrganizedCrime", "Runtime", "Release1ShortNoticeQuantityHarness.cs"));
         var hash = Convert.ToHexString(SHA256.HashData(bytes));
         Assert.Equal(ShortNoticeQuantityHarness739a88bSha256, hash, StringComparer.OrdinalIgnoreCase);
     }
@@ -495,7 +512,7 @@ public sealed class Release1ProductionReachabilityTests
     public void Mod_is_byte_identical_to_its_oc_10_content()
     {
         var root = FindRepositoryRoot();
-        var bytes = File.ReadAllBytes(Path.Combine(root, "tools", "OrganizedCrime", "Mod.cs"));
+        var bytes = ReadLineEndingNormalizedBytes(Path.Combine(root, "tools", "OrganizedCrime", "Mod.cs"));
         var hash = Convert.ToHexString(SHA256.HashData(bytes));
         Assert.Equal(ModCsOc10Sha256, hash, StringComparer.OrdinalIgnoreCase);
     }
@@ -506,19 +523,19 @@ public sealed class Release1ProductionReachabilityTests
         var root = FindRepositoryRoot();
         var runtimeDir = Path.Combine(root, "tools", "OrganizedCrime", "Runtime");
 
-        var wrongAddressBytes = File.ReadAllBytes(Path.Combine(runtimeDir, "Release1WrongAddressStagingHarness.cs"));
+        var wrongAddressBytes = ReadLineEndingNormalizedBytes(Path.Combine(runtimeDir, "Release1WrongAddressStagingHarness.cs"));
         Assert.Equal(
             WrongAddressStagingHarnessAe43a07Sha256,
             Convert.ToHexString(SHA256.HashData(wrongAddressBytes)),
             StringComparer.OrdinalIgnoreCase);
 
-        var roomBytes = File.ReadAllBytes(Path.Combine(runtimeDir, "Release1RoomWithNoNameHoldRoomHarness.cs"));
+        var roomBytes = ReadLineEndingNormalizedBytes(Path.Combine(runtimeDir, "Release1RoomWithNoNameHoldRoomHarness.cs"));
         Assert.Equal(
             RoomWithNoNameHoldRoomHarness66a60aeSha256,
             Convert.ToHexString(SHA256.HashData(roomBytes)),
             StringComparer.OrdinalIgnoreCase);
 
-        var shortNoticeBytes = File.ReadAllBytes(Path.Combine(runtimeDir, "Release1ShortNoticeQuantityHarness.cs"));
+        var shortNoticeBytes = ReadLineEndingNormalizedBytes(Path.Combine(runtimeDir, "Release1ShortNoticeQuantityHarness.cs"));
         Assert.Equal(
             ShortNoticeQuantityHarness66a60aeSha256,
             Convert.ToHexString(SHA256.HashData(shortNoticeBytes)),

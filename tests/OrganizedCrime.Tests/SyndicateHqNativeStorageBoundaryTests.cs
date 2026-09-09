@@ -7,8 +7,11 @@ namespace OrganizedCrime.Tests;
 
 public sealed class SyndicateHqNativeStorageBoundaryTests
 {
+    // Normalised to LF so the multi-line expectations below match on any checkout, not only a
+    // CRLF-converting Windows one.
     private static readonly string Source = File.ReadAllText(
-        Path.Combine(FindRepositoryRoot(), "tools", "OrganizedCrime", "Runtime", "SyndicateHqNativeStorageBoundary.cs"));
+        Path.Combine(FindRepositoryRoot(), "tools", "OrganizedCrime", "Runtime", "SyndicateHqNativeStorageBoundary.cs"))
+        .Replace("\r\n", "\n", StringComparison.Ordinal);
 
     [Fact]
     public void Boundary_contract_prepares_a_grid_instead_of_resolving_a_supplier_storage_template()
@@ -77,15 +80,15 @@ public sealed class SyndicateHqNativeStorageBoundaryTests
     public void An_unresolved_definition_returns_unavailable_with_a_reason()
     {
         Assert.Contains(
-            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\r\n" +
+            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\n" +
             "                return Release1SmallCourtesyWorldReadStatus.Unavailable;",
             Source, StringComparison.Ordinal);
         Assert.Contains(
-            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\r\n" +
+            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\n" +
             "                return Release1SmallCourtesyWorldMutationStatus.Unavailable;",
             Source, StringComparison.Ordinal);
         Assert.Contains(
-            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\r\n" +
+            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\n" +
             "            return Release1SmallCourtesyWorldMutationStatus.Unavailable;",
             Source, StringComparison.Ordinal);
     }
@@ -94,10 +97,10 @@ public sealed class SyndicateHqNativeStorageBoundaryTests
     public void A_decrement_without_an_owned_lock_returns_rejected()
     {
         Assert.Contains(
-            "if (!_ownedClosetSlotLocks.Contains(key))\r\n" +
-            "        {\r\n" +
-            "            reason = $\"Closet '{definition.Name}' slot {slotIndex} was not locked by this mod.\";\r\n" +
-            "            return Release1SmallCourtesyWorldMutationStatus.Rejected;\r\n" +
+            "if (!_ownedClosetSlotLocks.Contains(key))\n" +
+            "        {\n" +
+            "            reason = $\"Closet '{definition.Name}' slot {slotIndex} was not locked by this mod.\";\n" +
+            "            return Release1SmallCourtesyWorldMutationStatus.Rejected;\n" +
             "        }",
             Source, StringComparison.Ordinal);
     }
@@ -107,16 +110,16 @@ public sealed class SyndicateHqNativeStorageBoundaryTests
     {
         // Checked before TryResolveClosetSlot, so this guard never touches a native slot either.
         Assert.Contains(
-            "if (!float.IsFinite(amount) || amount >= 0f || amount < -S1ApiRelease1SmallCourtesyWorld.MaximumCashDecrement)\r\n" +
-            "        {\r\n" +
-            "            reason = $\"Closet '{definition.Name}' slot {slotIndex} decrement {amount} was out of bounds.\";\r\n" +
-            "            return Release1SmallCourtesyWorldMutationStatus.Rejected;\r\n" +
+            "if (!float.IsFinite(amount) || amount >= 0f || amount < -S1ApiRelease1SmallCourtesyWorld.MaximumCashDecrement)\n" +
+            "        {\n" +
+            "            reason = $\"Closet '{definition.Name}' slot {slotIndex} decrement {amount} was out of bounds.\";\n" +
+            "            return Release1SmallCourtesyWorldMutationStatus.Rejected;\n" +
             "        }",
             Source, StringComparison.Ordinal);
         var lockCheckIndex = Source.IndexOf("if (!_ownedClosetSlotLocks.Contains(key))", StringComparison.Ordinal);
         var amountCheckIndex = Source.IndexOf("if (!float.IsFinite(amount) || amount >= 0f", StringComparison.Ordinal);
         var resolveCallIndex = Source.IndexOf(
-            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\r\n            return Release1SmallCourtesyWorldMutationStatus.Unavailable;",
+            "if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))\n            return Release1SmallCourtesyWorldMutationStatus.Unavailable;",
             StringComparison.Ordinal);
         Assert.True(lockCheckIndex >= 0 && amountCheckIndex > lockCheckIndex && resolveCallIndex > amountCheckIndex,
             "the amount guard must run after the lock guard and before the native slot is ever resolved.");
@@ -126,15 +129,15 @@ public sealed class SyndicateHqNativeStorageBoundaryTests
     public void Release_owned_closet_slot_locks_empties_the_owned_set_even_when_a_slot_no_longer_resolves()
     {
         Assert.Contains(
-            "public void ReleaseOwnedClosetSlotLocks()\r\n" +
-            "    {\r\n" +
-            "        foreach (var (guid, slotIndex) in _ownedClosetSlotLocks.ToArray())\r\n" +
-            "        {\r\n" +
-            "            var definition = SyndicateHqStorageContract.Definitions.FirstOrDefault(candidate => candidate.Guid == guid);\r\n" +
-            "            if (definition is not null && TryResolveClosetSlot(definition, slotIndex, out var slot, out _))\r\n" +
-            "                try { slot.SetIsRemovalLocked(false); slot.SetIsAddLocked(false); } catch { }\r\n" +
-            "            _ownedClosetSlotLocks.Remove((guid, slotIndex));\r\n" +
-            "        }\r\n" +
+            "public void ReleaseOwnedClosetSlotLocks()\n" +
+            "    {\n" +
+            "        foreach (var (guid, slotIndex) in _ownedClosetSlotLocks.ToArray())\n" +
+            "        {\n" +
+            "            var definition = SyndicateHqStorageContract.Definitions.FirstOrDefault(candidate => candidate.Guid == guid);\n" +
+            "            if (definition is not null && TryResolveClosetSlot(definition, slotIndex, out var slot, out _))\n" +
+            "                try { slot.SetIsRemovalLocked(false); slot.SetIsAddLocked(false); } catch { }\n" +
+            "            _ownedClosetSlotLocks.Remove((guid, slotIndex));\n" +
+            "        }\n" +
             "    }",
             Source, StringComparison.Ordinal);
     }

@@ -277,7 +277,7 @@ public sealed class LocalPressureCustodyEvidenceWriterTests
     public void Ready_steam_identity_mismatch_rejects_evidence_before_mutation()
     {
         using var fixture = ActiveFixture();
-        fixture.Adapter.Players = new[] { FakeHostAdapter.SinglePlayer("76561197984645370") };
+        fixture.Adapter.Players = new[] { FakeHostAdapter.SinglePlayer("76561190000000002") };
 
         var result = fixture.Service.TryApplyCustodyEvidence(
             Evidence(fixture, 1),

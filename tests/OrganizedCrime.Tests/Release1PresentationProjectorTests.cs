@@ -55,7 +55,7 @@ public sealed class Release1PresentationProjectorTests
     {
         var harness = new Harness();
         harness.ActivateStory(AcceptedStory());
-        harness.Context.Snapshot = harness.Context.Snapshot with { PlayerId = "76561197984645370" }; // identity now mismatches
+        harness.Context.Snapshot = harness.Context.Snapshot with { PlayerId = "76561190000000002" }; // identity now mismatches
         var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, null, null));
 
         projector.Reconcile();

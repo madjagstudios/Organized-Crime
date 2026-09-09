@@ -242,7 +242,7 @@ public sealed class Release1SmallCourtesyMissionServiceTests
         harness.Story.OnSaveComplete();
         harness.Service.OnSaveComplete();
 
-        harness.World.Context = harness.World.Context with { PlayerId = "76561197984645370" };
+        harness.World.Context = harness.World.Context with { PlayerId = "76561190000000002" };
         harness.Service.Update();
         Assert.Equal(Release1MissionState.Active, harness.Story.State.Missions[0].State);
 

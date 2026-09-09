@@ -100,7 +100,7 @@ public sealed class CustodyEntryGateTests
         gate.ObserveNotArrested("76561190000000001", Session, 11);
 
         var missing = gate.TryCommit(Occurrence(playerId: ""), "76561190000000001", Session, 11, true);
-        var mismatch = gate.TryCommit(Occurrence(), "76561197984645370", Session, 11, true);
+        var mismatch = gate.TryCommit(Occurrence(), "76561190000000002", Session, 11, true);
         var stale = gate.TryCommit(Occurrence(), "76561190000000001", Session, 10, true);
 
         Assert.Equal(CustodyEntryRejectReason.MissingIdentity, missing.RejectReason);

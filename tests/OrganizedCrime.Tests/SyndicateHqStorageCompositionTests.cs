@@ -13,11 +13,11 @@ public sealed class SyndicateHqStorageCompositionTests
     [Fact]
     public void Load_path_resolver_finds_the_exact_save_root_from_a_nested_native_path()
     {
-        var path = @"C:\Users\Player\AppData\LocalLow\TVGS\Schedule I\Saves\76561190000000001\SaveGame_4\Storages";
+        var path = @"C:\Users\player\AppData\LocalLow\TVGS\Schedule I\Saves\76561190000000001\SaveGame_4\Storages";
 
         Assert.True(SyndicateHqStorageLoadContextAdapter.TryFindSaveRoot(path, out var root));
         Assert.Equal(
-            @"C:\Users\Player\AppData\LocalLow\TVGS\Schedule I\Saves\76561190000000001\SaveGame_4",
+            @"C:\Users\player\AppData\LocalLow\TVGS\Schedule I\Saves\76561190000000001\SaveGame_4",
             root);
     }
 

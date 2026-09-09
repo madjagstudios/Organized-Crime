@@ -156,9 +156,9 @@ public sealed class PoliceCustodyEvidenceBridgeTests
     [Fact]
     public void A_ready_steam_code_mismatch_is_rejected()
     {
-        using var fixture = CreateFixture(playerCode: "76561197984645370");
-        var state = fixture.Bridge.CapturePrefix(fixture.Observation(false, playerCode: "76561197984645370"));
-        fixture.Bridge.ConfirmPostfix(fixture.Observation(true, playerCode: "76561197984645370"), state);
+        using var fixture = CreateFixture(playerCode: "76561190000000002");
+        var state = fixture.Bridge.CapturePrefix(fixture.Observation(false, playerCode: "76561190000000002"));
+        fixture.Bridge.ConfirmPostfix(fixture.Observation(true, playerCode: "76561190000000002"), state);
 
         Assert.Equal(0, fixture.Writer.ApplyCalls);
     }

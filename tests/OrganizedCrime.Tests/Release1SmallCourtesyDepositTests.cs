@@ -246,7 +246,7 @@ public sealed class Release1SmallCourtesyDepositTests
         Assert.Empty(saving.Story.State!.NativeEffects);
 
         using var drifted = ActiveMission();
-        drifted.World.Context = drifted.World.Context with { PlayerId = "76561197984645370" };
+        drifted.World.Context = drifted.World.Context with { PlayerId = "76561190000000002" };
         Assert.Equal(
             Release1SmallCourtesyDepositStatus.Rejected,
             drifted.Service.TryHandleDropClosed(drifted.Assignment.DeadDropGuid));

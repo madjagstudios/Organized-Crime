@@ -42,7 +42,7 @@ public sealed class Release1PresentationReceiptTests
     public void State_rejects_a_receipt_whose_player_id_differs_from_player_id()
     {
         var otherPlayerCorrelation = Release1LogicalCorrelation.Create(
-            "76561197984645370", Release1MissionCatalog.IntroScopeKey, 0, Release1TransitionKind.IntroAccepted, "mismatch").Value;
+            "76561190000000002", Release1MissionCatalog.IntroScopeKey, 0, Release1TransitionKind.IntroAccepted, "mismatch").Value;
         var story = Story() with { PresentationReceipts = new[] { new Release1PresentationReceipt(otherPlayerCorrelation, 1) } };
 
         Assert.Throws<ArgumentException>(() => story.Validate());
