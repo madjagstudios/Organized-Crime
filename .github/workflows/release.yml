@@ -41,8 +41,9 @@ jobs:
           echo "Publishing $zip as version $version"
 
       - name: Publish to Nexus Mods
-        # Pin this to the action's current release tag or commit SHA before relying on it.
-        uses: Nexus-Mods/upload-action@v1
+        # Nexus-Mods/upload-action only publishes v1.0.0-beta.N tags; pinned to the latest.
+        # Re-pin (ideally to a commit SHA) when they cut a stable release.
+        uses: Nexus-Mods/upload-action@v1.0.0-beta.10
         with:
           api_key: ${{ secrets.NEXUSMODS_API_KEY }}
           mod_id: '31701153614321'
