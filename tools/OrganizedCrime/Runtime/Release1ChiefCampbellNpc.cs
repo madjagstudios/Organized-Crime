@@ -1,6 +1,9 @@
+using Il2CppInterop.Runtime;
 using MelonLoader;
+using NPCManager = Il2CppScheduleOne.NPCs.NPCManager;
 using S1API.Entities;
 using S1API.Messaging;
+using UnityEngine;
 
 namespace OrganizedCrime.Runtime;
 
@@ -52,19 +55,87 @@ public sealed class Release1ChiefCampbellNpc : NPC, IRelease1MessagingNpc
         try
         {
             var source = NPC.Get(npcId);
-            if (source?.Icon is null)
+            if (source?.Icon is not null)
             {
-                MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait: no icon found on '{npcId}'; keeping the default.");
+                Icon = source.Icon;
+                RefreshMessagingIcons();
+                MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait borrowed from NPC '{npcId}'.");
                 return;
             }
 
-            Icon = source.Icon;
-            RefreshMessagingIcons();
-            MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait borrowed from NPC '{npcId}'.");
+            // Police officers carry no messaging mugshot on the installed build, so the borrow alone
+            // leaves the default icon. Ask the officer's avatar to render one the way the game builds
+            // its own faces; the texture arrives later through ApplyRenderedPortrait.
+            if (TryRenderPortraitFromAvatar(npcId)) return;
+
+            MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait: no icon found on '{npcId}'; keeping the default.");
         }
         catch (Exception exception)
         {
             MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait borrow from '{npcId}' failed ({exception.GetType().Name}); keeping the default.");
+        }
+    }
+
+    /// <summary>
+    /// Held for the life of this contact so the interop trampoline the game was handed cannot be
+    /// collected before the mugshot callback fires.
+    /// </summary>
+    private Il2CppSystem.Action<Texture2D>? _mugshotCallback;
+
+    /// <summary>
+    /// Finds the native NPC for <paramref name="npcId"/> in the game's own registry (S1API keeps its
+    /// native handle internal) and asks its <c>Avatar</c> for a mugshot. Returns false, with nothing
+    /// logged, when there is no such NPC, no avatar, or no settings to render from, so the caller can
+    /// fall through to the existing "no icon found" line. The render itself is asynchronous: a true
+    /// return means the request was accepted, not that a face exists yet.
+    /// </summary>
+    private bool TryRenderPortraitFromAvatar(string npcId)
+    {
+        var registry = NPCManager.NPCRegistry;
+        if (registry is null) return false;
+
+        Il2CppScheduleOne.NPCs.NPC? native = null;
+        for (var i = 0; i < registry.Count; i++)
+        {
+            var candidate = registry[i];
+            if (candidate is not null && string.Equals(candidate.ID, npcId, StringComparison.Ordinal))
+            {
+                native = candidate;
+                break;
+            }
+        }
+
+        var avatar = native?.Avatar;
+        if (avatar is null || avatar.CurrentSettings is null) return false;
+
+        _mugshotCallback = DelegateSupport.ConvertDelegate<Il2CppSystem.Action<Texture2D>>(
+            new Action<Texture2D>(texture => ApplyRenderedPortrait(npcId, texture)));
+        avatar.GetMugshot(_mugshotCallback);
+        MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait: rendering from the avatar of '{npcId}'.");
+        return true;
+    }
+
+    /// <summary>
+    /// The mugshot callback. Fires on the game's schedule, possibly after a load has replaced this
+    /// contact, so it checks it still has a texture to work with and swallows any failure: the worst
+    /// case is the default icon the Chief already has.
+    /// </summary>
+    private void ApplyRenderedPortrait(string npcId, Texture2D? texture)
+    {
+        try
+        {
+            if (texture is null || texture.width <= 0 || texture.height <= 0)
+            {
+                MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait: the avatar of '{npcId}' rendered no texture; keeping the default.");
+                return;
+            }
+
+            Icon = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+            MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait rendered from the avatar of '{npcId}' ({texture.width}x{texture.height}).");
+        }
+        catch (Exception exception)
+        {
+            MelonLogger.Msg($"[Organized Crime] Chief Campbell portrait render from '{npcId}' failed ({exception.GetType().Name}); keeping the default.");
         }
     }
 

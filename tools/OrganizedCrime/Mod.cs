@@ -22,7 +22,7 @@ using UnityEngine.AI;
 [assembly: MelonInfo(
     typeof(OrganizedCrime.OrganizedCrimeMod),
     "Organized Crime",
-    "1.0.0",
+    "1.0.1",
     "MadJag Studios")]
 
 namespace OrganizedCrime;

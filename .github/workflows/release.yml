@@ -1,0 +1,65 @@
+name: Publish release
+
+# Fires when you publish a GitHub Release (tag like v1.0.1) with the locally-built
+# MadJagStudios-OrganizedCrime-<version>.zip attached as an asset. The mod cannot be
+# built on CI — its project references your local Schedule I install for the game
+# assemblies — so the attached zip (from packaging/build-package.ps1) is the source of
+# truth. This job just carries that one zip to Nexus and Thunderstore.
+#
+# One-time setup in the repository's Settings:
+#   Secrets:  NEXUSMODS_API_KEY   (Nexus personal API key, from nexusmods.com settings/api-keys)
+#             THUNDERSTORE_TOKEN  (Thunderstore SERVICE ACCOUNT token — created once under your
+#                                  team's service accounts; long-lived, so no more per-upload keys)
+# The Nexus mod_id / file_id below are public identifiers for the mod page and are inlined.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version and download the release zip
+        id: prep
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'MadJagStudios-OrganizedCrime-*.zip' --dir dist
+          zip="$(ls dist/MadJagStudios-OrganizedCrime-*.zip)"
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+          echo "Publishing $zip as version $version"
+
+      - name: Publish to Nexus Mods
+        # Pin this to the action's current release tag or commit SHA before relying on it.
+        uses: Nexus-Mods/upload-action@v1
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          mod_id: '31701153614321'
+          file_id: '7921932'
+          filename: ${{ steps.prep.outputs.zip }}
+          version: ${{ steps.prep.outputs.version }}
+          update_mod_version: true
+          archive_existing_version: true
+          changelog: ${{ github.event.release.body }}
+
+      - name: Publish to Thunderstore
+        env:
+          TCLI_AUTH_TOKEN: ${{ secrets.THUNDERSTORE_TOKEN }}
+        run: |
+          set -euo pipefail
+          dotnet tool install --global tcli
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          # Keep thunderstore.toml's version in step with the release being published.
+          sed -i "s/^versionNumber = .*/versionNumber = \"${{ steps.prep.outputs.version }}\"/" thunderstore.toml
+          tcli publish --file "${{ steps.prep.outputs.zip }}" --token "$TCLI_AUTH_TOKEN"

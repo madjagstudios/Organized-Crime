@@ -151,9 +151,10 @@ public sealed class Release1ProductionReachabilityTests
     // unchanged. Mod.cs's bytes change again, so the constant is re-pinned once more, same convention.
     // Re-recorded for the 1.0.0 release: the MelonInfo version stamp moves from 1.0.0-rc1 to 1.0.0.
     // Mod.cs's bytes change again, so the constant is re-pinned once more, same convention.
+    // Re-recorded for the 1.0.1 release: the MelonInfo version stamp moves from 1.0.0 to 1.0.1.
     //
     private const string ModCsOc10Sha256 =
-        "E00E9B66CAE118755591C7C1EECA9A438EE5608FF5362DBEBFBFCDF44AAE6E4E";
+        "B0E610EE4413349EB8D7E53032B4E66E8EE8B9D755D33434EE5808A8B494B127";
 
     // Recorded straight off the working tree at 66a60ae (the "draft the envelope spec" commit that
     // opens this branch); OC-60's tasks never touch these owner QA harness files, so their content at
@@ -1124,6 +1125,48 @@ public sealed class Release1ProductionReachabilityTests
     }
 
     [Fact]
+    public void Chief_portrait_renders_a_mugshot_from_the_officer_avatar_when_the_borrow_finds_no_icon()
+    {
+        // Release1ChiefCampbellNpc.cs is S1API/MelonLoader-dependent and not linked into the test
+        // project, so this reads the source, like the Nell portrait test above. The officer the Chief
+        // borrows from carries no messaging icon on the installed build, so the borrow alone leaves the
+        // default icon; the fallback asks the native NPC's avatar for a mugshot and sets Icon when the
+        // game's callback delivers the texture. Every step stays inside TryApplyPortrait's try block
+        // and the callback has a try block of its own, because it fires later, possibly after a load.
+        var root = FindRepositoryRoot();
+        var chiefNpc = File.ReadAllText(Path.Combine(root, "tools", "OrganizedCrime", "Runtime", "Release1ChiefCampbellNpc.cs"));
+
+        var tryStart = chiefNpc.IndexOf("private void TryApplyPortrait()", StringComparison.Ordinal);
+        Assert.True(tryStart >= 0, "TryApplyPortrait was not found.");
+        var tryBody = chiefNpc.Substring(tryStart);
+        var borrowIndex = tryBody.IndexOf("NPC.Get(npcId)", StringComparison.Ordinal);
+        var renderIndex = tryBody.IndexOf("TryRenderPortraitFromAvatar(npcId)", StringComparison.Ordinal);
+        var catchIndex = tryBody.IndexOf("catch (Exception exception)", StringComparison.Ordinal);
+        Assert.True(borrowIndex >= 0 && renderIndex > borrowIndex && catchIndex > renderIndex,
+            "the borrow must be tried first, then the avatar render, both inside TryApplyPortrait's try block.");
+
+        Assert.Contains("NPCManager.NPCRegistry", chiefNpc, StringComparison.Ordinal);
+        Assert.Contains(".Avatar", chiefNpc, StringComparison.Ordinal);
+        Assert.Contains("GetMugshot(", chiefNpc, StringComparison.Ordinal);
+        Assert.Contains("DelegateSupport.ConvertDelegate", chiefNpc, StringComparison.Ordinal);
+        Assert.Contains("Sprite.Create(", chiefNpc, StringComparison.Ordinal);
+
+        // The delivered texture is applied inside its own try block, and the delegate is kept alive in
+        // a field rather than left to the collector while the game still holds the trampoline.
+        var callbackStart = chiefNpc.IndexOf("private void ApplyRenderedPortrait(", StringComparison.Ordinal);
+        Assert.True(callbackStart >= 0, "ApplyRenderedPortrait was not found.");
+        var callbackBody = chiefNpc.Substring(callbackStart);
+        Assert.True(callbackBody.IndexOf("try", StringComparison.Ordinal) >= 0 &&
+                    callbackBody.IndexOf("catch (Exception exception)", StringComparison.Ordinal) > callbackBody.IndexOf("Sprite.Create(", StringComparison.Ordinal),
+            "the rendered texture must be applied inside a try block.");
+        Assert.Contains("private Il2CppSystem.Action<Texture2D>? _mugshotCallback;", chiefNpc, StringComparison.Ordinal);
+
+        // The existing borrow and its fail-soft log line are unchanged.
+        Assert.Contains("Icon = source.Icon;", chiefNpc, StringComparison.Ordinal);
+        Assert.Contains("Chief Campbell portrait: no icon found on '{npcId}'; keeping the default.", chiefNpc, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Nell_portrait_defaults_to_lily_turner_and_the_preference_still_overrides_when_non_empty()
     {
         var root = FindRepositoryRoot();
@@ -1433,7 +1476,7 @@ public sealed class Release1ProductionReachabilityTests
         var attributeEnd = mod.IndexOf(")]", attributeStart, StringComparison.Ordinal);
         Assert.True(attributeStart >= 0 && attributeEnd > attributeStart, "MelonInfo attribute was not found.");
         var attributeText = mod[attributeStart..attributeEnd];
-        Assert.Contains("\"1.0.0\"", attributeText, StringComparison.Ordinal);
+        Assert.Contains("\"1.0.1\"", attributeText, StringComparison.Ordinal);
         Assert.Contains("\"Organized Crime\"", attributeText, StringComparison.Ordinal);
         Assert.Contains("\"MadJag Studios\"", attributeText, StringComparison.Ordinal);
     }

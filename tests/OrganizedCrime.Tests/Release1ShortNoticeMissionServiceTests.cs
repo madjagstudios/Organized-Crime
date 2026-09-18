@@ -627,6 +627,15 @@ internal static class Release1ShortNoticeHarness
         public float? ForcedPostChangeMonetaryValue { get; set; }
         public int QuantityDriftOnNextChange { get; set; }
 
+        // OC-91: simulates an unrelated, out-of-band cash change (not one of ours) that lands
+        // between the baseline read taken right after consumption and the verification read Short
+        // Notice makes before attempting to pay. Zero means no drift; set once before the deposit
+        // pass under test. Mirrors Release1WrongAddressMissionServiceTests.FakeWorld's field of the
+        // same name.
+        public float DriftCashAfterConsumption { get; set; }
+        private bool _cashDriftArmed;
+        private bool _cashDriftSkippedOnce;
+
         public Release1SmallCourtesyWorldReadStatus TryReadContext(out Release1StoryHostContextSnapshot context)
         {
             context = Context;
@@ -781,6 +790,7 @@ internal static class Release1ShortNoticeHarness
             }
             drop[slotIndex] = current with { Quantity = newQuantity, MonetaryValue = newValue };
             QuantityChanges++;
+            if (DriftCashAfterConsumption != 0f) { _cashDriftArmed = true; _cashDriftSkippedOnce = false; }
             return Release1SmallCourtesyWorldMutationStatus.Succeeded;
         }
 
@@ -809,6 +819,11 @@ internal static class Release1ShortNoticeHarness
 
         public Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance)
         {
+            if (_cashDriftArmed)
+            {
+                if (!_cashDriftSkippedOnce) _cashDriftSkippedOnce = true;
+                else { CashBalance += DriftCashAfterConsumption; _cashDriftArmed = false; _cashDriftSkippedOnce = false; }
+            }
             balance = CashBalance;
             return Release1SmallCourtesyWorldReadStatus.Ready;
         }

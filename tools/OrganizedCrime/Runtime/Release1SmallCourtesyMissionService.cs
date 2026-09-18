@@ -428,25 +428,20 @@ public sealed class Release1SmallCourtesyMissionService : IDisposable
             !string.Equals(effect.DestinationIdentity, "player-cash", StringComparison.Ordinal))
             return BlockRewardEffect(effect);
         if (effect.ExecutionBlocked) return Release1SmallCourtesyRewardStatus.Ambiguous;
-        if (!TryReadCashBalance(out var balance)) return Release1SmallCourtesyRewardStatus.Rejected;
 
-        var atBaseline = WithinCashTolerance(balance, identity.BaselineCash, identity.VerificationTolerance);
-        var atExpected = WithinCashTolerance(balance, identity.ExpectedCash, identity.VerificationTolerance);
+        // Reward payout is verified by a before/after cash delta at apply time, not an
+        // absolute watermark read here. Idempotency comes from the effect phase plus the native
+        // receipt, so no cash read gates the Prepared or Applied branches below.
         if (effect.Phase == Release1NativeEffectPhase.Prepared)
         {
             if (effect.PreparedStoryRevision > _story.LastPersistedRevision)
                 return Release1SmallCourtesyRewardStatus.AwaitingPreparedSave;
-            if (atExpected)
-                return MarkRewardApplied(effect);
-            if (!atBaseline)
-                return BlockRewardEffect(effect);
             return ApplyPreparedReward(effect, identity);
         }
         if (effect.Phase == Release1NativeEffectPhase.Applied)
         {
             if (_story.State!.Revision > _story.LastPersistedRevision)
                 return Release1SmallCourtesyRewardStatus.AwaitingAppliedSave;
-            if (!atExpected) return Release1SmallCourtesyRewardStatus.Ambiguous;
             var authorization = effect.AuthorizedStoryCorrelationId;
             if (string.IsNullOrEmpty(authorization)) return Release1SmallCourtesyRewardStatus.Ambiguous;
             var committed = _story.TryCommitNativeEffect(effect.EffectId, authorization);
@@ -530,6 +525,13 @@ public sealed class Release1SmallCourtesyMissionService : IDisposable
         Release1NativeEffectJournalEntry effect,
         Release1SmallCourtesyRewardIdentity identity)
     {
+        // Cash moves between prepare and apply in real play, so the reward is re-anchored
+        // to a fresh before/after DELTA read right here instead of the frozen ExpectedCash
+        // watermark from prepare time. Idempotency still comes from the effect phase and the
+        // native receipt (MarkRewardApplied/TryMarkNativeEffectApplied), not from cash value.
+        if (!TryReadCashBalance(out var before))
+            return Release1SmallCourtesyRewardStatus.Rejected;
+        var expectedAfter = before + identity.WholeDollarAmount;
         Release1SmallCourtesyWorldMutationStatus changed;
         try { changed = _world.TryChangeCashBalance(identity.WholeDollarAmount); }
         catch { return BlockRewardEffect(effect); }
@@ -538,7 +540,7 @@ public sealed class Release1SmallCourtesyMissionService : IDisposable
                 ? Release1SmallCourtesyRewardStatus.Rejected
                 : BlockRewardEffect(effect);
         if (!TryReadCashBalance(out var post) ||
-            !WithinCashTolerance(post, identity.ExpectedCash, identity.VerificationTolerance))
+            !WithinCashTolerance(post, expectedAfter, identity.VerificationTolerance))
             return BlockRewardEffect(effect);
         return MarkRewardApplied(effect);
     }

@@ -1,0 +1,30 @@
+# Thunderstore CLI (tcli) config, used by the release workflow to publish the pre-built
+# package zip to the schedule-i community. The DLL is built locally (packaging/build-package.ps1),
+# so CI publishes the attached zip rather than building; tcli reads the community, categories,
+# and package identity from here. versionNumber is synced to the release tag by the workflow.
+[config]
+schemaVersion = "0.0.1"
+
+[package]
+namespace = "MadJagStudios"
+name = "OrganizedCrime"
+versionNumber = "1.0.1"
+description = "End game story-line expansion. Nell Grey offers you six jobs, Arthur Selby calls when you fail them, and Chief Campbell wants paying to lose your file. Earn a hidden HQ, keep the heat down, or watch the town go to curfew because of you."
+websiteUrl = "https://github.com/madjagstudios/Organized-Crime"
+containsNsfwContent = false
+
+[package.dependencies]
+LavaGang-MelonLoader = "0.7.3"
+ifBars-S1API_Forked = "3.2.0"
+
+[build]
+icon = "packaging/thunderstore/icon.png"
+readme = "packaging/thunderstore/README.md"
+outdir = "dist"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["schedule-i"]
+
+[publish.categories]
+schedule-i = ["mods", "il2cpp"]

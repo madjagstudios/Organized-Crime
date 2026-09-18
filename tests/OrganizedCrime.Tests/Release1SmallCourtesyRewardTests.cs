@@ -94,23 +94,29 @@ public sealed class Release1SmallCourtesyRewardTests
     }
 
     [Fact]
-    public void Persisted_prepared_with_expected_cash_infers_applied_without_paying_again()
+    // Pins phase-based idempotency; a frozen ExpectedCash watermark can't survive the real save
+    // model, since native cash and the sidecar phase are captured together at save-start.
+    public void Applied_reward_commits_regardless_of_current_cash_and_never_pays_twice()
     {
         using var harness = Release1SmallCourtesyDepositTests.ActiveMission();
         PrepareDeposit(harness, 1_000f);
         harness.Service.TryHandleDropClosed(harness.Assignment.DeadDropGuid);
         Release1SmallCourtesyDepositTests.Save(harness);
-        var identity = RewardIdentity(harness);
-        harness.World.CashBalance = identity.ExpectedCash;
+        Release1SmallCourtesyDepositTests.Save(harness);
+        Assert.Equal(Release1NativeEffectPhase.Applied, Reward(harness).Phase);
+
+        harness.World.CashBalance = 42_000f;
+        harness.World.ResetMutationEvidence();
 
         Release1SmallCourtesyDepositTests.Save(harness);
 
+        Assert.Equal(Release1NativeEffectPhase.Committed, Reward(harness).Phase);
         Assert.Equal(0, harness.World.CashChanges);
-        Assert.Equal(Release1NativeEffectPhase.Applied, Reward(harness).Phase);
     }
 
     [Fact]
-    public void Conflicting_cash_blocks_prepared_reward_without_native_mutation()
+    // Positive drift case: cash goes up by 10 between prepare and apply, and the reward pays anyway.
+    public void Unrelated_cash_movement_before_apply_no_longer_blocks_the_reward()
     {
         using var harness = Release1SmallCourtesyDepositTests.ActiveMission();
         PrepareDeposit(harness, 1_000f);
@@ -121,10 +127,28 @@ public sealed class Release1SmallCourtesyRewardTests
         Release1SmallCourtesyDepositTests.Save(harness);
 
         var reward = Reward(harness);
-        Assert.Equal(Release1NativeEffectPhase.Prepared, reward.Phase);
-        Assert.True(reward.ExecutionBlocked);
-        Assert.Equal(0, harness.World.CashChanges);
-        Assert.Equal(Release1SmallCourtesyRewardStatus.Ambiguous, harness.Service.ReconcileReward());
+        Assert.Equal(Release1NativeEffectPhase.Applied, reward.Phase);
+        Assert.False(reward.ExecutionBlocked);
+        Assert.Equal(1, harness.World.CashChanges);
+        Assert.Equal(510f + 1250f, harness.World.CashBalance);
+    }
+
+    [Fact]
+    public void A_cash_decrease_before_apply_no_longer_blocks_the_reward_either()
+    {
+        using var harness = Release1SmallCourtesyDepositTests.ActiveMission();
+        PrepareDeposit(harness, 1_000f);
+        harness.Service.TryHandleDropClosed(harness.Assignment.DeadDropGuid);
+        Release1SmallCourtesyDepositTests.Save(harness);
+        harness.World.CashBalance -= 300f;
+
+        Release1SmallCourtesyDepositTests.Save(harness);
+
+        var reward = Reward(harness);
+        Assert.Equal(Release1NativeEffectPhase.Applied, reward.Phase);
+        Assert.False(reward.ExecutionBlocked);
+        Assert.Equal(1, harness.World.CashChanges);
+        Assert.Equal(200f + 1250f, harness.World.CashBalance);
     }
 
     [Fact]
@@ -207,7 +231,9 @@ public sealed class Release1SmallCourtesyRewardTests
     }
 
     [Fact]
-    public void Persisted_applied_with_baseline_cash_is_ambiguous_and_does_not_pay_again()
+    // Once Applied, the reward already holds its native receipt, so committing it is pure
+    // bookkeeping and must not care what the live cash balance happens to be.
+    public void Persisted_applied_with_baseline_cash_commits_and_does_not_pay_again()
     {
         using var harness = Release1SmallCourtesyDepositTests.ActiveMission();
         PrepareDeposit(harness, 1_000f);
@@ -221,10 +247,10 @@ public sealed class Release1SmallCourtesyRewardTests
 
         Release1SmallCourtesyDepositTests.Save(harness);
 
-        Assert.Equal(Release1SmallCourtesyRewardStatus.Ambiguous, harness.Service.ReconcileReward());
+        Assert.Equal(Release1SmallCourtesyRewardStatus.Committed, harness.Service.ReconcileReward());
         Assert.Equal(0, harness.World.CashChanges);
         Assert.Equal(baseline, harness.World.CashBalance);
-        Assert.Equal(Release1NativeEffectPhase.Applied, Reward(harness).Phase);
+        Assert.Equal(Release1NativeEffectPhase.Committed, Reward(harness).Phase);
     }
 
     private static void PrepareDeposit(Release1SmallCourtesyDepositTests.Harness harness, float monetaryValue)

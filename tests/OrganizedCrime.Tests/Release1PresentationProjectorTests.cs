@@ -565,9 +565,11 @@ public sealed class Release1PresentationProjectorTests
     [Fact]
     public void Partial_decision_bind_does_not_stall_quest_reconciliation()
     {
-        // A decision status other than Faulted/Succeeded (e.g. TrySetDecision still waiting on
-        // restored responses) must log once and let the pass continue, so a desired quest still gets
-        // applied in the same pass instead of waiting on the decision to settle first.
+        // A decision status other than Faulted/Succeeded (e.g. TrySetDecision still waiting
+        // on restored responses) is an ordinary recoverable condition, like Unavailable/Rejected
+        // everywhere else on this boundary (see TryStatus and the class doc), so it is never logged.
+        // The pass must still continue past it, so a desired quest still gets applied in the same
+        // pass instead of waiting on the decision to settle first.
         var harness = new Harness();
         var story = WithSmallCourtesyState(AcceptedStory(), Release1MissionState.Accepted);
         harness.ActivateStory(story);
@@ -579,7 +581,7 @@ public sealed class Release1PresentationProjectorTests
 
         projector.Reconcile();
 
-        Assert.Single(logs);
+        Assert.Empty(logs);
         Assert.Contains(harness.Native.Events, e => e == $"ApplyQuest:{Release1MissionCatalog.SmallCourtesy}");
     }
 
@@ -634,6 +636,56 @@ public sealed class Release1PresentationProjectorTests
 
         Assert.Null(exception);
         Assert.Single(logs);
+        Assert.DoesNotContain(harness.Native.Events, e => e.StartsWith("ApplyQuest:", StringComparison.Ordinal));
+    }
+
+    // ---- Decision-status logging must not flood the log --------------------------------
+
+    [Fact]
+    public void Repeated_reconcile_passes_with_a_persistently_unavailable_decision_do_not_flood_the_log()
+    {
+        // For roughly the first 10 seconds after a load, S1API has not yet restored decision
+        // responses, so TrySetDecision reports Unavailable on every pass while the host calls
+        // Reconcile() every frame (~700 passes over that window). Unavailable/Rejected are ordinary
+        // recoverable conditions everywhere else on this boundary (TryStatus never logs them), so
+        // ApplyDecisionStatus must not log them either, no matter how many passes it takes to settle.
+        // Before the fix, the "log once" guard was a local reset on every Reconcile() call, so this
+        // logged once per pass: 100 passes produced ~100 identical lines instead of zero.
+        var harness = new Harness();
+        var story = WithSmallCourtesyState(AcceptedStory(), Release1MissionState.Accepted);
+        harness.ActivateStory(story);
+        var assignment = MakeAssignment(1);
+        var view = new Release1SmallCourtesyViewModel(true, Release1SmallCourtesyCardStage.AwaitingActivation, "Small Courtesy", "Accepted.", false, true, true);
+        harness.Native.SetDecisionStatus = Release1NativePresentationStatus.Unavailable;
+        var logs = new List<string>();
+        var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, view, assignment), logs.Add);
+
+        for (var pass = 0; pass < 100; pass++)
+            projector.Reconcile();
+
+        Assert.Empty(logs);
+    }
+
+    [Fact]
+    public void Faulted_decision_set_still_logs_and_ends_the_pass()
+    {
+        // A genuine fault on the decision-set call is not a recoverable condition: it must still be
+        // logged once, exactly like every other boundary call, and the pass must still end before the
+        // quest loop runs (unlike Unavailable/Rejected, which let the pass continue).
+        var harness = new Harness();
+        var story = WithSmallCourtesyState(AcceptedStory(), Release1MissionState.Accepted);
+        harness.ActivateStory(story);
+        var assignment = MakeAssignment(1);
+        var view = new Release1SmallCourtesyViewModel(true, Release1SmallCourtesyCardStage.AwaitingActivation, "Small Courtesy", "Accepted.", false, true, true);
+        harness.Native.SetDecisionStatus = Release1NativePresentationStatus.Faulted;
+        var logs = new List<string>();
+        var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, view, assignment), logs.Add);
+
+        var exception = Record.Exception(() => projector.Reconcile());
+
+        Assert.Null(exception);
+        Assert.Single(logs);
+        Assert.Contains(logs, message => message.Contains("reported a fault", StringComparison.Ordinal));
         Assert.DoesNotContain(harness.Native.Events, e => e.StartsWith("ApplyQuest:", StringComparison.Ordinal));
     }
 

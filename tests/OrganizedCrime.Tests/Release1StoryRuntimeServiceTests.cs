@@ -53,6 +53,34 @@ public sealed class Release1StoryRuntimeServiceTests
     }
 
     [Fact]
+    public void Immediate_persistence_proceeds_once_the_applied_effect_is_covered_even_with_later_drift()
+    {
+        // A covered applied effect must not stall an unrelated durable command (here, the next
+        // mission's progression), even with in-memory drift sitting on top of it.
+        var harness = ActiveHarnessWithPreparedEffect();
+        harness.Service.OnSaveStart();
+        harness.Service.OnSaveComplete();                                   // persist the prepared effect
+        Assert.Equal(Release1StoryCommandStatus.Accepted, harness.Service.TryMarkNativeEffectApplied("effect-1", "native-receipt").Status);
+        harness.Service.OnSaveStart();
+        harness.Service.OnSaveComplete();                                   // a native save now COVERS the applied effect
+        Assert.Equal(Release1NativeEffectPhase.Applied, harness.Service.State!.NativeEffects.Single().Phase);
+        Assert.Equal(harness.Service.State!.Revision, harness.Service.LastPersistedRevision);
+
+        // In-memory drift, like a reconcile pass advancing the revision between saves.
+        var nextMission = harness.Service.State!.Missions[1];
+        Assert.Equal(Release1StoryCommandStatus.Accepted, harness.Service.TryExecute(Command(nextMission, Release1TransitionKind.MissionAccepted, "next-accept-drift", "v1")).Status);
+        Assert.True(harness.Service.State!.Revision > harness.Service.LastPersistedRevision);
+
+        // The covered applied effect must NOT defer this durable command.
+        var activated = harness.Service.State!.Missions[1];
+        var result = harness.Service.TryExecuteDurably(Command(activated, Release1TransitionKind.MissionActivated, "next-activate-after-covered"));
+
+        Assert.Equal(Release1StoryCommandStatus.Accepted, result.Status);
+        Assert.Equal(Release1MissionState.Active, harness.Service.State!.Missions[1].State);
+        Assert.Equal(harness.Service.State!.Revision, harness.Service.LastPersistedRevision);
+    }
+
+    [Fact]
     public void Native_effect_phases_advance_only_across_their_native_save_boundaries()
     {
         var harness = ActiveHarnessWithPreparedEffect();

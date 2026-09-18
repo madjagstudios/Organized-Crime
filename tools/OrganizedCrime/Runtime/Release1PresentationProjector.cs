@@ -85,9 +85,10 @@ public sealed class Release1PresentationProjector : IDisposable
     /// and <see cref="Release1NativePresentationStatus.Rejected"/> also end the pass, without logging,
     /// since they are ordinary recoverable conditions. The one exception is the decision-set/clear
     /// calls: a non-<see cref="Release1NativePresentationStatus.Faulted"/>,
-    /// non-<see cref="Release1NativePresentationStatus.Succeeded"/> status there is logged once and
-    /// the pass continues on to the quest loop instead of ending, so a decision bind that legitimately
-    /// needs another pass to settle never stalls quest reconciliation behind it.
+    /// non-<see cref="Release1NativePresentationStatus.Succeeded"/> status there (also without
+    /// logging, for the same reason) lets the pass continue on to the quest loop instead of ending, so
+    /// a decision bind that legitimately needs another pass to settle never stalls quest
+    /// reconciliation behind it.
     ///
     /// A desired message is sent when its correlation has no matching entry in
     /// <see cref="Release1StoryState.PresentationReceipts"/>, in memory or persisted; the receipt is
@@ -185,11 +186,16 @@ public sealed class Release1PresentationProjector : IDisposable
 
     /// <summary>
     /// Applies one decision-related native call. A <see cref="Release1NativePresentationStatus.Faulted"/>
-    /// result (or a thrown exception) stops the whole reconcile pass, like every other boundary call.
-    /// <see cref="Release1NativePresentationStatus.Unavailable"/> or <see cref="Release1NativePresentationStatus.Rejected"/>
-    /// (for example, a partial response bind still waiting on responses S1API has not restored yet) is
-    /// logged once but treated as non-fatal for this pass: quest reconciliation must not stall behind a
-    /// decision bind that legitimately needs another pass to settle.
+    /// result (or a thrown exception) stops the whole reconcile pass, like every other boundary call,
+    /// and is logged once. <see cref="Release1NativePresentationStatus.Unavailable"/> or
+    /// <see cref="Release1NativePresentationStatus.Rejected"/> (for example, a partial response bind
+    /// still waiting on responses S1API has not restored yet) is treated as non-fatal for this pass
+    /// and, like every other recoverable status on this boundary (see <see cref="TryStatus"/> and the
+    /// class doc), is never logged: quest reconciliation must not stall behind a decision bind that
+    /// legitimately needs another pass to settle, and Reconcile() runs every frame, so logging a
+    /// condition expected to persist across many passes (for example, the ~10 second window after a
+    /// load before S1API restores decision responses) would flood the log once per pass instead of
+    /// once per session.
     /// </summary>
     private static bool ApplyDecisionStatus(Func<Release1NativePresentationStatus> call, Action<string> logOnce, string description)
     {
@@ -205,8 +211,6 @@ public sealed class Release1PresentationProjector : IDisposable
             logOnce($"{description} reported a fault.");
             return false;
         }
-        if (status != Release1NativePresentationStatus.Succeeded)
-            logOnce($"{description} did not complete this pass ({status}); continuing.");
         return true;
     }
 

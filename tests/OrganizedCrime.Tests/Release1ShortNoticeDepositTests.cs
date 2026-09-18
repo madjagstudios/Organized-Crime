@@ -188,6 +188,26 @@ public sealed class Release1ShortNoticeDepositTests
         Assert.True(harness.Consumption().ExecutionBlocked);
     }
 
+    [Fact]
+    // Short Notice's FakeWorld had no way to simulate a cash movement between consumption and
+    // payment until DriftCashAfterConsumption was added to it here, mirroring the seam already on
+    // Release1WrongAddressMissionServiceTests.FakeWorld.
+    public void Losing_cash_between_consumption_and_payment_does_not_stop_the_reward()
+    {
+        using var harness = Release1ShortNoticeHarness.Active();
+        var assignment = harness.Assignment;
+        harness.World.SetSlot(assignment.HandoffDropGuid, 0, assignment.ProductId, assignment.PackagingId, assignment.RequiredQuantity, monetaryValue: 3_000f);
+        var cashBefore = harness.World.CashBalance;
+        harness.World.DriftCashAfterConsumption = -400f;
+
+        var status = harness.Service.ReconcileDeposit();
+
+        Assert.Equal(Release1ShortNoticeDepositStatus.Paid, status);
+        Assert.False(harness.Reward().ExecutionBlocked);
+        Assert.Equal(1, harness.World.CashChanges);
+        Assert.Equal(cashBefore - 400f + 5_250f, harness.World.CashBalance);
+    }
+
     // Production (per-stack) convention on a full consumption: summed consumed value = preValue -
     // postValue = preValue, since postValue lands at zero. Each row's stack total (requiredQuantity *
     // perUnitValue) is chosen to land the 175 percent quote exactly on a half dollar (N=3: total 6,

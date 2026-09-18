@@ -97,17 +97,39 @@ public sealed class Release1RoomWithNoNameDeliveryTests
     }
 
     [Fact]
-    public void A_cash_balance_that_drifted_between_the_baseline_and_the_payment_blocks_the_reward()
+    // Cash drifts up by 250 after consumption; the reward re-anchors to a fresh delta and pays
+    // through the drift rather than blocking on it.
+    public void A_cash_balance_that_drifted_between_the_baseline_and_the_payment_no_longer_blocks_the_reward()
     {
         using var harness = Release1RoomWithNoNameHarness.Released();
+        var cashBefore = harness.World.CashBalance;
         harness.World.PlaceExactPackage(harness.Assignment, harness.Assignment.HandoffDropGuid, slotIndex: 2, value: 1_000f);
         harness.World.DriftCashAfterConsumption = 250f;
 
         var status = harness.Service.ReconcileDelivery();
 
-        Assert.Equal(Release1RoomWithNoNameDeliveryStatus.Ambiguous, status);
-        Assert.Equal(0, harness.World.CashChanges);
-        Assert.True(harness.Reward().ExecutionBlocked);
+        Assert.Equal(Release1RoomWithNoNameDeliveryStatus.Paid, status);
+        Assert.False(harness.Reward().ExecutionBlocked);
+        Assert.Equal(1, harness.World.CashChanges);
+        Assert.Equal(cashBefore + 250f + 1_500f, harness.World.CashBalance);
+    }
+
+    [Fact]
+    // Same idea in the other direction: a 400 drop instead of the 250 rise above, so a
+    // sign-dependent bug couldn't hide behind just one of the two.
+    public void Pulling_cash_out_after_consumption_does_not_starve_the_payout()
+    {
+        using var harness = Release1RoomWithNoNameHarness.Released();
+        var cashBefore = harness.World.CashBalance;
+        harness.World.PlaceExactPackage(harness.Assignment, harness.Assignment.HandoffDropGuid, slotIndex: 2, value: 1_000f);
+        harness.World.DriftCashAfterConsumption = -400f;
+
+        var status = harness.Service.ReconcileDelivery();
+
+        Assert.Equal(Release1RoomWithNoNameDeliveryStatus.Paid, status);
+        Assert.False(harness.Reward().ExecutionBlocked);
+        Assert.Equal(1, harness.World.CashChanges);
+        Assert.Equal(cashBefore - 400f + 1_500f, harness.World.CashBalance);
     }
 
     [Fact]

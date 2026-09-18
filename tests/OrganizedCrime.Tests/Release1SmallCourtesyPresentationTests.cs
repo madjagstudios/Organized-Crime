@@ -142,7 +142,10 @@ public sealed class Release1SmallCourtesyPresentationTests
         using var harness = Release1SmallCourtesyDepositTests.ActiveMission();
         harness.Service.TryHandleDropClosed(harness.Assignment.DeadDropGuid);
         Release1SmallCourtesyDepositTests.Save(harness);
-        harness.World.CashBalance += 10f;
+        // A throwing native mutation is the trigger here (unrelated cash drift no longer blocks
+        // anything, per Release1SmallCourtesyRewardTests) so this can still exercise the
+        // presentation layer's handling of a genuinely blocked/ambiguous native effect.
+        harness.World.ThrowOnCashChange = true;
         Release1SmallCourtesyDepositTests.Save(harness);
 
         var view = Build(harness);

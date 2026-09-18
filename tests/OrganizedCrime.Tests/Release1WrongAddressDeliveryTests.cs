@@ -215,16 +215,38 @@ public sealed class Release1WrongAddressDeliveryTests
     }
 
     [Fact]
-    public void A_balance_matching_neither_baseline_nor_expected_holds_without_paying()
+    // Drift-tolerance check: cash drifts up by 77 after consumption, and the reward still pays.
+    public void A_balance_drifting_after_consumption_no_longer_blocks_the_reward()
     {
         using var harness = Release1WrongAddressHarness.InCustody();
+        var cashBefore = harness.World.CashBalance;
         harness.World.PlaceExactPackage(harness.Assignment, harness.Assignment.HandoffDropGuid, slotIndex: 2, value: 1_000f);
         harness.World.DriftCashAfterConsumption = 77f;
 
-        Assert.Equal(Release1WrongAddressDeliveryStatus.Ambiguous, harness.Service.ReconcileDelivery());
+        var status = harness.Service.ReconcileDelivery();
 
-        Assert.Equal(0, harness.World.CashChanges);
-        Assert.True(harness.Reward().ExecutionBlocked);
+        Assert.Equal(Release1WrongAddressDeliveryStatus.Paid, status);
+        Assert.False(harness.Reward().ExecutionBlocked);
+        Assert.Equal(1, harness.World.CashChanges);
+        Assert.Equal(cashBefore + 77f + 1_250f, harness.World.CashBalance);
+    }
+
+    [Fact]
+    // Mirrors the drift test above but goes negative (-300 vs +77), so neither direction is
+    // secretly the only one covered.
+    public void A_three_hundred_dollar_drop_in_cash_still_lets_the_reward_land()
+    {
+        using var harness = Release1WrongAddressHarness.InCustody();
+        var cashBefore = harness.World.CashBalance;
+        harness.World.PlaceExactPackage(harness.Assignment, harness.Assignment.HandoffDropGuid, slotIndex: 2, value: 1_000f);
+        harness.World.DriftCashAfterConsumption = -300f;
+
+        var status = harness.Service.ReconcileDelivery();
+
+        Assert.Equal(Release1WrongAddressDeliveryStatus.Paid, status);
+        Assert.False(harness.Reward().ExecutionBlocked);
+        Assert.Equal(1, harness.World.CashChanges);
+        Assert.Equal(cashBefore - 300f + 1_250f, harness.World.CashBalance);
     }
 
     [Fact]

@@ -821,28 +821,26 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
             !string.Equals(effect.DestinationIdentity, RewardDestination, StringComparison.Ordinal))
             return BlockReward(effect);
         if (effect.ExecutionBlocked) return Release1ShortNoticeDepositStatus.Ambiguous;
-        if (!TryReadCashBalance(out var balance)) return Release1ShortNoticeDepositStatus.Rejected;
 
-        var atBaseline = WithinCashTolerance(balance, identity.BaselineCash, identity.VerificationTolerance);
-        var atExpected = WithinCashTolerance(balance, identity.ExpectedCash, identity.VerificationTolerance);
-
+        // Reward payout is verified by a before/after cash delta at apply time, not an
+        // absolute watermark read here. Idempotency comes from the effect phase plus the native
+        // receipt, so no cash read gates the Prepared or Applied branches below.
         if (effect.Phase == Release1NativeEffectPhase.Prepared)
         {
-            if (atExpected) return MarkRewardApplied(effect);
-            if (!atBaseline) return BlockReward(effect);
+            if (!TryReadCashBalance(out var before)) return Release1ShortNoticeDepositStatus.Rejected;
+            var expectedAfter = before + identity.WholeDollarAmount;
             Release1SmallCourtesyWorldMutationStatus changed;
             try { changed = _world.TryChangeCashBalance(identity.WholeDollarAmount); }
             catch { return BlockReward(effect); }
             if (changed != Release1SmallCourtesyWorldMutationStatus.Succeeded) return BlockReward(effect);
             if (!TryReadCashBalance(out var post) ||
-                !WithinCashTolerance(post, identity.ExpectedCash, identity.VerificationTolerance))
+                !WithinCashTolerance(post, expectedAfter, identity.VerificationTolerance))
                 return BlockReward(effect);
             return MarkRewardApplied(effect);
         }
 
         if (effect.Phase == Release1NativeEffectPhase.Applied)
         {
-            if (!atExpected) return Release1ShortNoticeDepositStatus.Ambiguous;
             if (capturedRevision > _story.LastPersistedRevision)
                 return Release1ShortNoticeDepositStatus.AwaitingAppliedSave;
             var authorization = effect.AuthorizedStoryCorrelationId;

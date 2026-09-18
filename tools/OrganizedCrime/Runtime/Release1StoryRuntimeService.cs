@@ -35,6 +35,13 @@ public sealed class Release1StoryRuntimeService : IDisposable
     public Release1StoryRuntimePhase Phase { get { lock (_gate) return _phase; } }
     public Release1StoryState? State { get { lock (_gate) return _state; } }
     public long LastPersistedRevision { get; private set; } = -1;
+    // The story revision at which the most recent native effect was marked Applied. In-memory
+    // only (resets to -1 on load, which is correct: a loaded Applied effect saved together with its
+    // native mutation, so it is already covered). Used by PersistState to defer only while an applied
+    // effect's world mutation is not yet covered by a native save, instead of blocking on any applied
+    // effect — a covered effect must not stall unrelated durable commands (e.g. the next mission's
+    // acceptance).
+    private long _lastAppliedRevision = -1;
     public Release1StoryRuntimeRejectReason LastLifecycleRejectReason => _lastLifecycleRejectReason;
 
     /// <summary>
@@ -1258,8 +1265,12 @@ public sealed class Release1StoryRuntimeService : IDisposable
 
     private Release1StoryRuntimeCommandResult PersistState(Release1StoryState updated, string successMessage)
     {
+        // Defer only while an applied effect's world mutation is not yet covered by a native
+        // save (_lastAppliedRevision ahead of LastPersistedRevision), not on the mere presence of any
+        // applied effect. A covered applied effect (already persisted together with its native
+        // mutation) must not stall an unrelated durable command such as the next mission's acceptance.
         if (_state is not null && _state.Revision > LastPersistedRevision &&
-            _state.NativeEffects.Any(effect => effect.Phase == Release1NativeEffectPhase.Applied))
+            _lastAppliedRevision > LastPersistedRevision)
             return new(
                 Release1StoryCommandStatus.DeferredSaving,
                 Release1StoryRuntimeRejectReason.None,
@@ -1436,7 +1447,11 @@ public sealed class Release1StoryRuntimeService : IDisposable
                 return Reject(Release1StoryRuntimeRejectReason.InvalidTransition, "Prepared effect was not durably persisted before native application.");
             var journal = Release1NativeEffectJournal.Apply(_state.NativeEffects, new(Release1NativeEffectCommandKind.MarkApplied, effectId, existing.MissionKey, existing.Attempt, existing.EffectKind, existing.SourceIdentity, existing.DestinationIdentity, existing.AmountOrCargoIdentity, nativeReceiptId), _state.Revision + 1);
             if (!journal.Accepted) return Reject(Release1StoryRuntimeRejectReason.InvalidTransition, journal.Message);
-            if (!journal.Idempotent) _state = _state with { NativeEffects = journal.Effects, Revision = _state.Revision + 1 };
+            if (!journal.Idempotent)
+            {
+                _state = _state with { NativeEffects = journal.Effects, Revision = _state.Revision + 1 };
+                _lastAppliedRevision = _state.Revision; // This applied mutation is not covered until the next native save
+            }
             return new(journal.Idempotent ? Release1StoryCommandStatus.NoOp : Release1StoryCommandStatus.Accepted, Release1StoryRuntimeRejectReason.None, _state, journal.Message);
         }
     }
