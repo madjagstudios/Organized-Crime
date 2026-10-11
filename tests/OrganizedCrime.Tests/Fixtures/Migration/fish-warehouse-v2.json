@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "propertyCode": "oc_fishwarehouse",
+  "unlocked": true,
+  "owned": true,
+  "employeeHomePlaced": false,
+  "employeeAgentTypeId": -1923039037,
+  "replay": {
+    "generationId": "b6d6531f1c924622866c29f0309953dd",
+    "saveFolderKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "phase": 7,
+    "snapshotRelativePath": "OrganizedCrime/fish-warehouse.snapshot.json",
+    "snapshotSha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    "capturedObjectCount": 0,
+    "capturedEmployeeCount": 0,
+    "replayedObjectCount": 0,
+    "replayedEmployeeCount": 0,
+    "failurePhase": null,
+    "failureReason": null,
+    "inventoryRestoredEmployeeGuids": null
+  },
+  "unsupportedEmployees": []
+}

@@ -2,6 +2,7 @@ using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Employees;
 using Il2CppScheduleOne.Property;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -43,7 +44,7 @@ public sealed class UnityNativeNavigationAdapter : IFishWarehouseNativeNavigatio
         if (scope == FishWarehouseNativeNavigationEmployeeScope.PropertyAssigned)
         {
             Property? property = _propertyRoot.GetComponent<Property>();
-            if (IsAlive(property) && property!.Employees is not null)
+            if (UnityLife.IsAlive(property) && property!.Employees is not null)
             {
                 foreach (Employee employee in property.Employees)
                     AddLiveEmployeeAgent(employee, agents);
@@ -96,7 +97,7 @@ public sealed class UnityNativeNavigationAdapter : IFishWarehouseNativeNavigatio
             ToUnityBounds(world.BakeBounds),
             Vector3.zero,
             Quaternion.identity);
-        if (!IsAlive(data))
+        if (!UnityLife.IsAlive(data))
             throw new InvalidOperationException($"Fish Warehouse native navigation produced no NavMeshData for agent ID {agentTypeId}.");
 
         NavMeshDataInstance instance = NavMesh.AddNavMeshData(data!, Vector3.zero, Quaternion.identity);
@@ -216,10 +217,12 @@ public sealed class UnityNativeNavigationAdapter : IFishWarehouseNativeNavigatio
         Employee employee,
         ICollection<FishWarehouseNativeNavigationLiveEmployeeAgent> agents)
     {
-        if (!IsAlive(employee) || !IsAlive(employee.Movement) || !IsAlive(employee.Movement.Agent))
+        // 0.4.7 made the agent private (_agent); a GetComponent lookup is unsafe because
+        // the agent sits on the prefab root while NPCMovement may be on a child.
+        if (!UnityLife.IsAlive(employee) || !UnityLife.IsAlive(employee.Movement) || !UnityLife.IsAlive(employee.Movement._agent))
             return;
 
-        int agentTypeId = employee.Movement.Agent.agentTypeID;
+        int agentTypeId = employee.Movement._agent.agentTypeID;
         string identity = $"{employee.name}#{employee.GetInstanceID()}";
         agents.Add(new FishWarehouseNativeNavigationLiveEmployeeAgent(identity, agentTypeId));
     }
@@ -230,18 +233,6 @@ public sealed class UnityNativeNavigationAdapter : IFishWarehouseNativeNavigatio
     private static FishWarehouseNativeNavigationVector ToModelVector(Vector3 value) => new(value.x, value.y, value.z);
 
     private static Vector3 ToUnity(FishWarehouseNativeNavigationVector value) => new(value.X, value.Y, value.Z);
-
-    private static bool IsAlive(UnityEngine.Object? value)
-    {
-        try
-        {
-            return value is not null && value != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 
     private void RemoveLink(int? resourceKey)
     {

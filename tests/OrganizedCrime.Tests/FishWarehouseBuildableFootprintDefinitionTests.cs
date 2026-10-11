@@ -6,24 +6,25 @@ namespace OrganizedCrime.Tests;
 public sealed class FishWarehouseBuildableFootprintDefinitionTests
 {
     [Fact]
-    public void Measured_footprint_is_derived_from_the_four_captured_corners()
+    public void Room_derived_footprint_uses_the_interior_walls_minus_the_allowance()
     {
         var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
 
-        Assert.Equal(-11.244f, footprint.MeasuredBounds.MinimumX, 3);
-        Assert.Equal(11.244f, footprint.MeasuredBounds.MaximumX, 3);
-        Assert.Equal(-6.526f, footprint.MeasuredBounds.MinimumZ, 3);
-        Assert.Equal(6.772f, footprint.MeasuredBounds.MaximumZ, 3);
+        Assert.Equal(-11.55f, footprint.MeasuredBounds.MinimumX, 3);
+        Assert.Equal(11.55f, footprint.MeasuredBounds.MaximumX, 3);
+        Assert.Equal(-6.85f, footprint.MeasuredBounds.MinimumZ, 3);
+        Assert.Equal(6.85f, footprint.MeasuredBounds.MaximumZ, 3);
         Assert.Equal(0.5f, footprint.GridCellSize, 3);
-        Assert.Equal(1, footprint.ClearanceCells);
+        Assert.Equal(0, footprint.ClearanceCells);
+        Assert.Equal(0.05f, FishWarehouseBuildableFootprintDefinition.WallAllowance, 3);
     }
 
     [Theory]
-    [InlineData(11.210f, -6.526f)]
-    [InlineData(11.244f, 6.510f)]
-    [InlineData(-10.797f, 6.772f)]
-    [InlineData(-11.244f, -6.510f)]
-    public void Keeps_each_captured_interior_corner_inside_the_measured_floor_envelope(float x, float z)
+    [InlineData(11.55f, -6.85f)]
+    [InlineData(11.55f, 6.85f)]
+    [InlineData(-11.55f, 6.85f)]
+    [InlineData(-11.55f, -6.85f)]
+    public void Keeps_the_room_walls_minus_the_allowance_inside_the_floor_envelope(float x, float z)
     {
         var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
 
@@ -31,10 +32,10 @@ public sealed class FishWarehouseBuildableFootprintDefinitionTests
     }
 
     [Theory]
-    [InlineData(0f, 0f)]
-    [InlineData(-10.244f, -5.526f)]
-    [InlineData(10.244f, 5.772f)]
-    public void Accepts_center_points_at_least_one_native_cell_inside_the_measured_walls(float x, float z)
+    [InlineData(0.25f, 0f)]
+    [InlineData(-11.55f, -6.85f)]
+    [InlineData(11.55f, 6.85f)]
+    public void Accepts_center_points_inside_the_room_walls_minus_the_allowance(float x, float z)
     {
         var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
 
@@ -42,15 +43,15 @@ public sealed class FishWarehouseBuildableFootprintDefinitionTests
     }
 
     [Theory]
-    [InlineData(-11.244f, -6.526f)]
-    [InlineData(11.244f, -6.526f)]
-    [InlineData(-11.244f, 6.772f)]
-    [InlineData(11.244f, 6.772f)]
-    [InlineData(-10.9f, 0f)]
-    [InlineData(10.9f, 0f)]
-    [InlineData(0f, -6.1f)]
-    [InlineData(0f, 6.3f)]
-    public void Rejects_wall_and_one_cell_clearance_boundary_points(float x, float z)
+    [InlineData(-11.6f, 0f)]
+    [InlineData(11.6f, 0f)]
+    [InlineData(0f, -6.9f)]
+    [InlineData(0f, 6.9f)]
+    [InlineData(-11.6f, -6.9f)]
+    [InlineData(11.6f, 6.9f)]
+    [InlineData(11.56f, 0f)]
+    [InlineData(0f, 6.86f)]
+    public void Rejects_points_at_or_beyond_the_interior_walls(float x, float z)
     {
         var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
 
@@ -58,10 +59,10 @@ public sealed class FishWarehouseBuildableFootprintDefinitionTests
     }
 
     [Theory]
-    [InlineData(-11.744f, 0f)]
-    [InlineData(11.744f, 0f)]
-    [InlineData(0f, -7.026f)]
-    [InlineData(0f, 7.272f)]
+    [InlineData(-12.05f, 0f)]
+    [InlineData(12.05f, 0f)]
+    [InlineData(0f, -7.35f)]
+    [InlineData(0f, 7.35f)]
     public void Rejects_measured_exterior_points(float x, float z)
     {
         var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
@@ -82,10 +83,15 @@ public sealed class FishWarehouseBuildableFootprintDefinitionTests
     }
 
     [Theory]
-    [InlineData(-10.244f, -5.526f, true)]
-    [InlineData(10.244f, 5.772f, true)]
-    [InlineData(-10.9f, 0f, false)]
-    [InlineData(10.9f, 0f, false)]
+    [InlineData(-11.25f, 0f, true)]
+    [InlineData(11.25f, 0f, true)]
+    [InlineData(0.25f, 6.5f, true)]
+    [InlineData(0.25f, -6.5f, true)]
+    [InlineData(-11.4f, 0f, false)]
+    [InlineData(11.4f, 0f, false)]
+    [InlineData(0.25f, 6.7f, false)]
+    [InlineData(0.25f, -6.7f, false)]
+    [InlineData(11.55f, 0f, false)]
     public void Requires_the_complete_native_cell_to_remain_inside_the_measured_floor(
         float centerX,
         float centerZ,
@@ -110,50 +116,108 @@ public sealed class FishWarehouseBuildableFootprintDefinitionTests
     }
 
     [Fact]
-    public void Builds_the_measured_coordinate_set_relative_to_the_existing_zero_cell()
+    public void Fixed_origin_coordinate_set_includes_the_employee_home_and_matches_the_footprint_count()
     {
         var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
 
         var coordinates = footprint.GetAllowedCellCoordinates(
             referenceCoordinateX: 0,
             referenceCoordinateY: 0,
-            referenceCenterX: -3.75f,
-            referenceCenterZ: -3.75f);
+            referenceCenterX: FishWarehouseBuildableFootprintDefinition.GridOriginX,
+            referenceCenterZ: FishWarehouseBuildableFootprintDefinition.GridOriginZ);
 
-        Assert.Contains(new FishWarehouseGridCellCoordinate(-13, -4), coordinates);
-        Assert.Contains(new FishWarehouseGridCellCoordinate(28, 20), coordinates);
         Assert.Contains(new FishWarehouseGridCellCoordinate(0, 0), coordinates);
-        Assert.DoesNotContain(new FishWarehouseGridCellCoordinate(-14, 0), coordinates);
-        Assert.DoesNotContain(new FishWarehouseGridCellCoordinate(0, 21), coordinates);
+        Assert.Contains(
+            new FishWarehouseGridCellCoordinate(
+                FishWarehouseEmployeeHomeDefinition.Default.GridX,
+                FishWarehouseEmployeeHomeDefinition.Default.GridY),
+            coordinates);
+        Assert.Equal(46 * 27, coordinates.Count); // 46 columns by 27 rows at 0.5 m.
     }
 
     [Fact]
-    public void Coordinate_set_preserves_existing_grid_cells_and_contains_only_safe_cells()
+    public void Fixed_layout_repeats_and_every_cell_center_fits_the_placement_bounds()
     {
         var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
 
         var coordinates = footprint.GetAllowedCellCoordinates(
             referenceCoordinateX: 0,
             referenceCoordinateY: 0,
-            referenceCenterX: -3.75f,
-            referenceCenterZ: -3.75f);
+            referenceCenterX: FishWarehouseBuildableFootprintDefinition.GridOriginX,
+            referenceCenterZ: FishWarehouseBuildableFootprintDefinition.GridOriginZ);
+        var repeatedCoordinates = footprint.GetAllowedCellCoordinates(
+            referenceCoordinateX: 0,
+            referenceCoordinateY: 0,
+            referenceCenterX: FishWarehouseBuildableFootprintDefinition.GridOriginX,
+            referenceCenterZ: FishWarehouseBuildableFootprintDefinition.GridOriginZ);
 
-        Assert.Equal(42 * 25, coordinates.Count);
+        Assert.Equal(coordinates, repeatedCoordinates);
         Assert.All(coordinates, coordinate =>
         {
-            var center = new FishWarehousePoint(
-                -3.75f + (coordinate.X * 0.5f),
-                0f,
-                -3.75f + (coordinate.Y * 0.5f));
+            var center = footprint.GetPropertyLocalCellCenter(coordinate, planeHeight: 0f);
             Assert.True(footprint.ContainsPlacementCell(center));
         });
     }
 
+    [Fact]
+    public void Every_allowed_cell_edge_stays_inside_the_room_walls_minus_the_allowance()
+    {
+        var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
+        float halfCell = 0.5f / 2f;
+        float minimumX = -(FishWarehouseInteriorRoomDefinition.HalfWidth - 0.05f);
+        float maximumX = FishWarehouseInteriorRoomDefinition.HalfWidth - 0.05f;
+        float minimumZ = -(FishWarehouseInteriorRoomDefinition.HalfDepth - 0.05f);
+        float maximumZ = FishWarehouseInteriorRoomDefinition.HalfDepth - 0.05f;
+
+        var coordinates = footprint.GetAllowedCellCoordinates(
+            referenceCoordinateX: 0,
+            referenceCoordinateY: 0,
+            referenceCenterX: FishWarehouseBuildableFootprintDefinition.GridOriginX,
+            referenceCenterZ: FishWarehouseBuildableFootprintDefinition.GridOriginZ);
+
+        Assert.NotEmpty(coordinates);
+        Assert.All(coordinates, coordinate =>
+        {
+            var center = footprint.GetPropertyLocalCellCenter(coordinate, planeHeight: 0f);
+            Assert.True(center.X - halfCell >= minimumX);
+            Assert.True(center.X + halfCell <= maximumX);
+            Assert.True(center.Z - halfCell >= minimumZ);
+            Assert.True(center.Z + halfCell <= maximumZ);
+        });
+    }
+
+    [Fact]
+    public void Fixed_cell_coordinates_map_to_fixed_property_local_centers()
+    {
+        var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
+
+        Assert.Equal(
+            new FishWarehousePoint(0.25f, 0.02f, 0f),
+            footprint.GetPropertyLocalCellCenter(new FishWarehouseGridCellCoordinate(0, 0), 0.02f));
+        Assert.Equal(
+            new FishWarehousePoint(1.25f, 0.02f, -1.5f),
+            footprint.GetPropertyLocalCellCenter(new FishWarehouseGridCellCoordinate(2, -3), 0.02f));
+    }
+
+    [Fact]
+    public void Reference_center_fifteen_meters_off_in_x_excludes_the_zero_cell()
+    {
+        var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(0.5f);
+
+        var coordinates = footprint.GetAllowedCellCoordinates(
+            referenceCoordinateX: 0,
+            referenceCoordinateY: 0,
+            referenceCenterX: 15f,
+            referenceCenterZ: 0f);
+
+        Assert.DoesNotContain(new FishWarehouseGridCellCoordinate(0, 0), coordinates);
+    }
+
     [Theory]
-    [InlineData(-10.25f, -5.75f, -13, -4)]
-    [InlineData(-0.25f, -0.25f, 7, 7)]
-    [InlineData(10.25f, 6.25f, 28, 20)]
-    public void Maps_local_build_points_to_the_preserved_native_coordinates(
+    [InlineData(-10.25f, -6f, -21, -12)]
+    [InlineData(-0.25f, 0.5f, -1, 1)]
+    [InlineData(10.75f, 6f, 21, 12)]
+    public void Maps_property_local_build_points_to_the_fixed_native_coordinates(
         float pointX,
         float pointZ,
         int expectedX,
@@ -162,7 +226,10 @@ public sealed class FishWarehouseBuildableFootprintDefinitionTests
         Assert.True(
             FishWarehouseBuildableFootprintDefinition.TryMapLocalPointToCoordinate(
                 new FishWarehousePoint(pointX, 0f, pointZ),
-                new FishWarehousePoint(-3.75f, 0f, -3.75f),
+                new FishWarehousePoint(
+                    FishWarehouseBuildableFootprintDefinition.GridOriginX,
+                    0f,
+                    FishWarehouseBuildableFootprintDefinition.GridOriginZ),
                 0.5f,
                 out var coordinate));
 

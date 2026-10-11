@@ -1,3 +1,4 @@
+using OrganizedCrime.Model;
 using OrganizedCrime.Runtime;
 using Xunit;
 

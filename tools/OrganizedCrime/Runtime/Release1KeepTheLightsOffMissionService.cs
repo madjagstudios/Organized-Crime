@@ -1,3 +1,6 @@
+using OrganizedCrime.Runtime.Release1.World;
+using OrganizedCrime.Core.Diagnostics;
+using OrganizedCrime.Core.Scheduling;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
@@ -21,7 +24,7 @@ public sealed class Release1KeepTheLightsOffMissionService : IDisposable
     private const string ArthurCallerLabel = "Arthur Selby";
 
     private readonly Release1StoryRuntimeService _story;
-    private readonly IRelease1SmallCourtesyWorld _world;
+    private readonly IProductionActivityMissionWorld _world;
     private readonly Release1PhoneCallService? _phone;
     private readonly Action<string> _log;
     private bool _loadActive;
@@ -29,15 +32,15 @@ public sealed class Release1KeepTheLightsOffMissionService : IDisposable
     private bool _dismissed;
     private bool _disposed;
     private Release1KeepTheLightsOffQuote? _reviewedQuote;
-    private readonly Release1ConvergenceThrottle _convergence = new Release1ConvergenceThrottle();
-    private readonly HashSet<string> _reportedHolds = new(StringComparer.Ordinal);
+    private readonly GameHourGate _convergence = new GameHourGate();
+    private readonly OnceLog _reportedHolds;
     private IReadOnlyList<Release1ProductionStationFingerprint> _previousStations =
         Array.Empty<Release1ProductionStationFingerprint>();
     private bool _baselinePassPending = true;
 
     public Release1KeepTheLightsOffMissionService(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IProductionActivityMissionWorld world,
         Release1PhoneCallService? phone = null,
         Action<string>? log = null)
     {
@@ -45,6 +48,7 @@ public sealed class Release1KeepTheLightsOffMissionService : IDisposable
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _phone = phone;
         _log = log ?? (_ => { });
+        _reportedHolds = new OnceLog(_log);
     }
 
     public Release1KeepTheLightsOffOfferStatus OfferStatus { get; private set; } = Release1KeepTheLightsOffOfferStatus.Inactive;
@@ -65,7 +69,7 @@ public sealed class Release1KeepTheLightsOffMissionService : IDisposable
         _reviewedQuote = null;
         _convergence.Clear();
         _baselinePassPending = true;
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         RefreshOfferStatus();
         ReconcileCensus();
         TryQueueArthur();
@@ -81,7 +85,7 @@ public sealed class Release1KeepTheLightsOffMissionService : IDisposable
         _convergence.Clear();
         _baselinePassPending = true;
         _previousStations = Array.Empty<Release1ProductionStationFingerprint>();
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         OfferStatus = Release1KeepTheLightsOffOfferStatus.Inactive;
     }
 
@@ -164,7 +168,7 @@ public sealed class Release1KeepTheLightsOffMissionService : IDisposable
     private bool TryBeginConvergencePass()
     {
         var revision = _story.State?.Revision ?? -1L;
-        return _convergence.TryBegin(TryReadGameMinutes(out var minutes) ? minutes : null, revision);
+        return _convergence.TryPass(TryReadGameMinutes(out var minutes) ? minutes : null, revision);
     }
 
     public Release1KeepTheLightsOffReviewResult TryReview()
@@ -648,8 +652,7 @@ public sealed class Release1KeepTheLightsOffMissionService : IDisposable
 
     private void ReportHoldOnce(int attempt, string message)
     {
-        if (!_reportedHolds.Add($"a{attempt}:{message}")) return;
-        _log($"Keep the Lights Off attempt {attempt} is holding: {message}");
+        _reportedHolds.Report($"a{attempt}:{message}", $"Keep the Lights Off attempt {attempt} is holding: {message}");
     }
 
     /// <summary>

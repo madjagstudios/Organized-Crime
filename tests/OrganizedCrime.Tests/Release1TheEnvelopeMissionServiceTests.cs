@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using OrganizedCrime.Model;
 using OrganizedCrime.Persistence;
 using OrganizedCrime.Runtime;
@@ -859,8 +860,92 @@ internal static class Release1TheEnvelopeHarness
         public void Dispose() { }
     }
 
-    internal sealed class FakeWorld : IRelease1SmallCourtesyWorld
+    internal sealed class FakeWorld : IEnvelopeMissionWorld, IDeliveryMissionWorld
     {
+        public Release1SmallCourtesyWorldReadStatus TryReadProducts(out IReadOnlyList<Release1SmallCourtesyProductCandidate> products)
+        {
+            products = Array.Empty<Release1SmallCourtesyProductCandidate>();
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TryReadDeadDrops(out IReadOnlyList<Release1SmallCourtesyDropCandidate> drops) =>
+            throw new InvalidOperationException("The Envelope must never read the world's dead drops.");
+
+        public Release1SmallCourtesyWorldReadStatus TryReadPackaging(
+            Release1SmallCourtesyPackageKind kind,
+            out Release1SmallCourtesyPackagingCandidate packaging)
+        {
+            packaging = kind == Release1SmallCourtesyPackageKind.Brick ? new("brick", "Brick") : new("jar", "Jar");
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlots(
+            string deadDropGuid,
+            out IReadOnlyList<Release1SmallCourtesySlotSnapshot> slots)
+        {
+            slots = DropOf(deadDropGuid).Values.OrderBy(slot => slot.SlotIndex).ToArray();
+            return AllDropGuids.Contains(deadDropGuid, StringComparer.Ordinal)
+                ? Release1SmallCourtesyWorldReadStatus.Ready
+                : Release1SmallCourtesyWorldReadStatus.Unavailable;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TrySetSlotLocked(string deadDropGuid, int slotIndex, bool locked)
+        {
+            MutationLog.Add($"lock:{slotIndex}:{locked.ToString().ToLowerInvariant()}");
+            if (locked && ReturnAmbiguousAfterLockOnce)
+            {
+                IsLocked = true;
+                ReturnAmbiguousAfterLockOnce = false;
+                return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
+            }
+            IsLocked = locked;
+            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TryChangeSlotQuantity(string deadDropGuid, int slotIndex, int amount) =>
+            throw new InvalidOperationException("The Envelope must never change a dead drop slot's quantity.");
+
+        public Release1SmallCourtesyWorldMutationStatus TryInsertPackagedProduct(
+            string deadDropGuid, int slotIndex, string productId, string packagingId, int quantity, out string reason)
+        {
+            reason = "The Envelope never stages a packaged product.";
+            return Release1SmallCourtesyWorldMutationStatus.Rejected;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TrySubscribeDeadDropClosed(
+            string deadDropGuid,
+            Action<string> callback,
+            out IRelease1SmallCourtesyDropSubscription? subscription)
+        {
+            SubscribedDropGuid = deadDropGuid;
+            SubscriptionDisposed = false;
+            _closed = callback;
+            subscription = new FakeSubscription(deadDropGuid, () =>
+            {
+                SubscriptionDisposed = true;
+                _closed = null;
+            });
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance)
+        {
+            balance = 0f;
+            return Release1SmallCourtesyWorldReadStatus.Unavailable;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TryChangeCashBalance(float amount)
+        {
+            WalletCashChangeCalls++;
+            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount)
+        {
+            WalletCashChangeCalls++;
+            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+        }
+
         private Action<string>? _closed;
         private static readonly string[] AllDropGuids = { "drop-a", "drop-b", "drop-c", "drop-d" };
 
@@ -958,34 +1043,8 @@ internal static class Release1TheEnvelopeHarness
             return Release1SmallCourtesyWorldReadStatus.Ready;
         }
 
-        public Release1SmallCourtesyWorldReadStatus TryReadProducts(out IReadOnlyList<Release1SmallCourtesyProductCandidate> products)
-        {
-            products = Array.Empty<Release1SmallCourtesyProductCandidate>();
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
         // The room is the destination now, so the mission service never resolves a dead drop; this
         // proves it by refusing to answer at all, the same way TryChangeSlotQuantity refuses below.
-        public Release1SmallCourtesyWorldReadStatus TryReadDeadDrops(out IReadOnlyList<Release1SmallCourtesyDropCandidate> drops) =>
-            throw new InvalidOperationException("The Envelope must never read the world's dead drops.");
-
-        public Release1SmallCourtesyWorldReadStatus TryReadPackaging(
-            Release1SmallCourtesyPackageKind kind,
-            out Release1SmallCourtesyPackagingCandidate packaging)
-        {
-            packaging = kind == Release1SmallCourtesyPackageKind.Brick ? new("brick", "Brick") : new("jar", "Jar");
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlots(
-            string deadDropGuid,
-            out IReadOnlyList<Release1SmallCourtesySlotSnapshot> slots)
-        {
-            slots = DropOf(deadDropGuid).Values.OrderBy(slot => slot.SlotIndex).ToArray();
-            return AllDropGuids.Contains(deadDropGuid, StringComparer.Ordinal)
-                ? Release1SmallCourtesyWorldReadStatus.Ready
-                : Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
 
         public Release1SmallCourtesyWorldReadStatus TryReadHoldRoom(out Release1HoldRoomSnapshot room)
         {
@@ -1019,103 +1078,17 @@ internal static class Release1TheEnvelopeHarness
             return Release1SmallCourtesyWorldReadStatus.Ready;
         }
 
-        public Release1SmallCourtesyWorldMutationStatus TrySetSlotLocked(string deadDropGuid, int slotIndex, bool locked)
-        {
-            MutationLog.Add($"lock:{slotIndex}:{locked.ToString().ToLowerInvariant()}");
-            if (locked && ReturnAmbiguousAfterLockOnce)
-            {
-                IsLocked = true;
-                ReturnAmbiguousAfterLockOnce = false;
-                return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
-            }
-            IsLocked = locked;
-            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
-        }
-
         // The Envelope's deposit transaction never mutates a dead drop's item quantity (cash carries
         // no packaging); a pass reaching this member anyway is a defect, so it throws.
-        public Release1SmallCourtesyWorldMutationStatus TryChangeSlotQuantity(string deadDropGuid, int slotIndex, int amount) =>
-            throw new InvalidOperationException("The Envelope must never change a dead drop slot's quantity.");
-
-        public Release1SmallCourtesyWorldMutationStatus TryInsertPackagedProduct(
-            string deadDropGuid, int slotIndex, string productId, string packagingId, int quantity, out string reason)
-        {
-            reason = "The Envelope never stages a packaged product.";
-            return Release1SmallCourtesyWorldMutationStatus.Rejected;
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TrySubscribeDeadDropClosed(
-            string deadDropGuid,
-            Action<string> callback,
-            out IRelease1SmallCourtesyDropSubscription? subscription)
-        {
-            SubscribedDropGuid = deadDropGuid;
-            SubscriptionDisposed = false;
-            _closed = callback;
-            subscription = new FakeSubscription(deadDropGuid, () =>
-            {
-                SubscriptionDisposed = true;
-                _closed = null;
-            });
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
 
         // The Envelope never touches the player's own wallet cash (there is no reward); this member
         // counts every call made to it, regardless of outcome, so tests can assert it was never
         // invoked at all.
-        public Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance)
-        {
-            balance = 0f;
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryChangeCashBalance(float amount)
-        {
-            WalletCashChangeCalls++;
-            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount)
-        {
-            WalletCashChangeCalls++;
-            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryEngageLockdown(out string reason)
-        {
-            reason = string.Empty;
-            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryReleaseLockdown(out string reason)
-        {
-            reason = string.Empty;
-            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
-        }
 
         // When true, TryReadDeadDropSlotCashBalance reports Faulted regardless of any stored balance,
         // simulating a transient read failure (e.g. the first pass right after a reload) rather than a
         // genuine, positively confirmed empty or non-cash slot. Persists until the test turns it off.
         public bool FaultCashBalanceReads { get; set; }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlotCashBalance(string deadDropGuid, int slotIndex, out float balance)
-        {
-            MutationLog.Add($"cashread:{slotIndex}");
-            balance = 0f;
-            if (FaultCashBalanceReads) return Release1SmallCourtesyWorldReadStatus.Faulted;
-            if (CashBalances.TryGetValue((deadDropGuid, slotIndex), out var value))
-            {
-                balance = value;
-                return Release1SmallCourtesyWorldReadStatus.Ready;
-            }
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-
-        // The Envelope's redesigned closet transaction never mutates a dead drop's cash balance (cash
-        // moves through TryChangeHoldRoomSlotCashBalance below); a pass reaching this member anyway is
-        // a defect, so it throws, the same way TryReadDeadDrops and TryChangeSlotQuantity do above.
-        public Release1SmallCourtesyWorldMutationStatus TryChangeDeadDropSlotCashBalance(string deadDropGuid, int slotIndex, float amount) =>
-            throw new InvalidOperationException("The Envelope must never change a dead drop slot's cash balance.");
 
         public Release1SmallCourtesyWorldReadStatus TryReadHoldRoomSlotCashBalance(string closetGuid, int slotIndex, out float balance)
         {
@@ -1160,25 +1133,6 @@ internal static class Release1TheEnvelopeHarness
             else ClosetCash[(closetGuid, slotIndex)] = next;
             return Release1SmallCourtesyWorldMutationStatus.Succeeded;
         }
-
-        // The mission under test never reads production activity.
-        public Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity)
-        {
-            activity = Release1ProductionActivitySnapshot.Empty;
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-        public Release1SmallCourtesyWorldReadStatus TryReadFieldContact(string contactId, out Release1FieldContactSnapshot snapshot)
-        { snapshot = Release1FieldContactSnapshot.Unavailable(); return Release1SmallCourtesyWorldReadStatus.Unavailable; }
-
-        public Release1SmallCourtesyWorldMutationStatus TryDespawnFieldContact(string contactId, out string reason)
-        { reason = "this fake never despawns a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-
-        public Release1SmallCourtesyWorldMutationStatus TryProvokeFieldContact(string contactId, out string reason)
-        { reason = "this fake never provokes a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-        public Release1SmallCourtesyWorldMutationStatus TryParkFieldContact(string contactId, out string reason)
-        { reason = "this fake never parks a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-        public Release1SmallCourtesyWorldMutationStatus TryUnparkFieldContact(string contactId, float aheadMetres, out string reason)
-        { reason = "this fake never unparks a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
 
         public void ResetMutationEvidence()
         {

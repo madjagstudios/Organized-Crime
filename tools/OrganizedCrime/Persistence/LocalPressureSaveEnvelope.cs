@@ -1,3 +1,4 @@
+using OrganizedCrime.Core.Persistence;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Persistence;
@@ -9,7 +10,7 @@ namespace OrganizedCrime.Persistence;
 /// </summary>
 public sealed record LocalPressureSaveEnvelope(
     int SchemaVersion,
-    IReadOnlyList<LocalPressurePlayerRecord> Players)
+    IReadOnlyList<LocalPressurePlayerRecord> Players) : SidecarEnvelope(SchemaVersion)
 {
     public static LocalPressureSaveEnvelope CreateEmpty() =>
         new(LocalPressureSaveCodec.CurrentSchemaVersion, Array.Empty<LocalPressurePlayerRecord>());
@@ -30,6 +31,8 @@ public sealed record LocalPressurePlayerRecord(
     string? Property,
     long Revision)
 {
+    internal string? LastAppliedRaidCoolingId { get; init; }
+
     public static LocalPressurePlayerRecord CreateDefault(string playerId) => new(
         playerId,
         LocalHeat: 0,
@@ -56,7 +59,7 @@ public sealed record LocalPressurePlayerRecord(
             state.LastDecayEvaluation,
             state.Region,
             state.PropertyCode,
-            state.Revision);
+            state.Revision) { LastAppliedRaidCoolingId = state.LastAppliedRaidCoolingId };
     }
 
     public LocalPressureState ToState() => new(
@@ -68,5 +71,5 @@ public sealed record LocalPressurePlayerRecord(
         PlayerId,
         Region,
         Property,
-        Revision);
+        Revision) { LastAppliedRaidCoolingId = LastAppliedRaidCoolingId };
 }

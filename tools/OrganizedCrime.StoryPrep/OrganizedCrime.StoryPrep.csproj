@@ -24,7 +24,7 @@
     what makes linking them into a plain console app possible.
   -->
   <ItemGroup>
-    <Compile Include="..\OrganizedCrime\Runtime\Release1ProductionActivityContracts.cs" Link="Runtime\Release1ProductionActivityContracts.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1ProductionActivityContracts.cs" Link="Model\Release1ProductionActivityContracts.cs" />
     <Compile Include="..\OrganizedCrime\Runtime\OrganizedCrimeLog.cs" Link="Runtime\OrganizedCrimeLog.cs" />
     <Compile Include="..\OrganizedCrime\Model\Release1MissionCatalog.cs" Link="Model\Release1MissionCatalog.cs" />
     <Compile Include="..\OrganizedCrime\Model\Release1StoryContracts.cs" Link="Model\Release1StoryContracts.cs" />
@@ -45,9 +45,10 @@
     <Compile Include="..\OrganizedCrime\Persistence\Release1StorySavePath.cs" Link="Persistence\Release1StorySavePath.cs" />
     <Compile Include="..\OrganizedCrime\Persistence\Release1StoryStateStore.cs" Link="Persistence\Release1StoryStateStore.cs" />
     <Compile Include="..\OrganizedCrime\Runtime\Release1StoryRuntimeContracts.cs" Link="Runtime\Release1StoryRuntimeContracts.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1StoryRuntimeContracts.cs" Link="Model\Release1StoryRuntimeContracts.cs" />
     <Compile Include="..\OrganizedCrime\Runtime\Release1StoryRuntimeService.cs" Link="Runtime\Release1StoryRuntimeService.cs" />
     <Compile Include="..\OrganizedCrime\Runtime\OrganizedCrimeTimingReceipts.cs" Link="Runtime\OrganizedCrimeTimingReceipts.cs" />
-    <Compile Include="..\OrganizedCrime\Runtime\Release1ShortNoticeValueRule.cs" Link="Runtime\Release1ShortNoticeValueRule.cs" />
+    <Compile Include="..\OrganizedCrime\Model\Release1ShortNoticeValueRule.cs" Link="Model\Release1ShortNoticeValueRule.cs" />
     <Compile Include="..\OrganizedCrime\Runtime\Release1PhoneCallContracts.cs" Link="Runtime\Release1PhoneCallContracts.cs" />
   </ItemGroup>
 </Project>

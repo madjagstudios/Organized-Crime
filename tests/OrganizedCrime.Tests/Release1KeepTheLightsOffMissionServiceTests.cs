@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using System.Text.Json.Nodes;
 using OrganizedCrime.Model;
 using OrganizedCrime.Persistence;
@@ -670,8 +671,107 @@ internal static class Release1KeepTheLightsOffHarness
         public void Dispose() { }
     }
 
-    internal sealed class FakeWorld : IRelease1SmallCourtesyWorld
+    internal sealed class FakeWorld : IProductionActivityMissionWorld, IDeliveryMissionWorld
     {
+        public Release1SmallCourtesyWorldReadStatus TryReadProducts(out IReadOnlyList<Release1SmallCourtesyProductCandidate> products)
+        {
+            ProductReads++;
+            products = Products;
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TryReadDeadDrops(out IReadOnlyList<Release1SmallCourtesyDropCandidate> drops)
+        {
+            DeadDropReads++;
+            drops = DropGuids.Select((guid, index) => new Release1SmallCourtesyDropCandidate(
+                guid,
+                $"Drop {index + 1}",
+                "A vanilla dead drop.",
+                index + 1,
+                index + 2,
+                index + 3,
+                true)).ToArray();
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TryReadPackaging(
+            Release1SmallCourtesyPackageKind kind,
+            out Release1SmallCourtesyPackagingCandidate packaging)
+        {
+            packaging = kind == Release1SmallCourtesyPackageKind.Brick ? new("brick", "Brick") : new("jar", "Jar");
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlots(
+            string deadDropGuid,
+            out IReadOnlyList<Release1SmallCourtesySlotSnapshot> slots)
+        {
+            DropSlotReads++;
+            slots = DropSlots.TryGetValue(deadDropGuid, out var configured) ? configured : Array.Empty<Release1SmallCourtesySlotSnapshot>();
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TrySetSlotLocked(string deadDropGuid, int slotIndex, bool locked) =>
+            Release1SmallCourtesyWorldMutationStatus.Succeeded;
+
+        public Release1SmallCourtesyWorldMutationStatus TryChangeSlotQuantity(string deadDropGuid, int slotIndex, int amount)
+        {
+            if (ThrowOnMutation) throw new InvalidOperationException("Keep the Lights Off never changes a dead drop slot's quantity.");
+            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TryInsertPackagedProduct(
+            string deadDropGuid, int slotIndex, string productId, string packagingId, int quantity, out string reason)
+        {
+            if (ThrowOnMutation) throw new InvalidOperationException("Keep the Lights Off never inserts packaged product at any drop.");
+            reason = "not used by Keep the Lights Off, which selects nothing at any drop.";
+            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TrySubscribeDeadDropClosed(
+            string deadDropGuid,
+            Action<string> callback,
+            out IRelease1SmallCourtesyDropSubscription? subscription)
+        {
+            SubscribeCalled = true;
+            throw new InvalidOperationException("Keep the Lights Off never subscribes to a dead drop closing.");
+        }
+
+        public Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance)
+        {
+            if (ThrowOnCashReadAfterMutation && CashChanges > 0)
+                throw new InvalidOperationException("synthetic post-payment read failure");
+            if (_cashReadUnavailableArmed)
+            {
+                if (!_cashReadUnavailableSkippedOnce) _cashReadUnavailableSkippedOnce = true;
+                else
+                {
+                    _cashReadUnavailableArmed = false;
+                    _cashReadUnavailableSkippedOnce = false;
+                    balance = 0f;
+                    return Release1SmallCourtesyWorldReadStatus.Unavailable;
+                }
+            }
+            if (_cashDriftArmed)
+            {
+                if (!_cashDriftSkippedOnce) _cashDriftSkippedOnce = true;
+                else { CashBalance += _cashDriftOnSecondRead; _cashDriftArmed = false; _cashDriftSkippedOnce = false; }
+            }
+            balance = CashBalance;
+            return Release1SmallCourtesyWorldReadStatus.Ready;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TryChangeCashBalance(float amount)
+        {
+            if (ThrowOnCashChange) throw new InvalidOperationException("synthetic cash mutation failure");
+            CapturePreSaveCashSnapshotIfNeeded();
+            CashBalance += amount;
+            CashChanges++;
+            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount) => throw new NotSupportedException();
+
         private static readonly string[] DefaultDropGuids = { "drop-a", "drop-b", "drop-c", "drop-d" };
 
         public FakeWorld()
@@ -747,156 +847,10 @@ internal static class Release1KeepTheLightsOffHarness
             return Release1SmallCourtesyWorldReadStatus.Ready;
         }
 
-        public Release1SmallCourtesyWorldReadStatus TryReadProducts(out IReadOnlyList<Release1SmallCourtesyProductCandidate> products)
-        {
-            ProductReads++;
-            products = Products;
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadDeadDrops(out IReadOnlyList<Release1SmallCourtesyDropCandidate> drops)
-        {
-            DeadDropReads++;
-            drops = DropGuids.Select((guid, index) => new Release1SmallCourtesyDropCandidate(
-                guid,
-                $"Drop {index + 1}",
-                "A vanilla dead drop.",
-                index + 1,
-                index + 2,
-                index + 3,
-                true)).ToArray();
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadPackaging(
-            Release1SmallCourtesyPackageKind kind,
-            out Release1SmallCourtesyPackagingCandidate packaging)
-        {
-            packaging = kind == Release1SmallCourtesyPackageKind.Brick ? new("brick", "Brick") : new("jar", "Jar");
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlots(
-            string deadDropGuid,
-            out IReadOnlyList<Release1SmallCourtesySlotSnapshot> slots)
-        {
-            DropSlotReads++;
-            slots = DropSlots.TryGetValue(deadDropGuid, out var configured) ? configured : Array.Empty<Release1SmallCourtesySlotSnapshot>();
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadHoldRoom(out Release1HoldRoomSnapshot room)
-        {
-            HoldRoomReads++;
-            room = HoldRoom;
-            return HoldRoom.Readiness == Release1HoldRoomReadiness.Ready
-                ? Release1SmallCourtesyWorldReadStatus.Ready
-                : Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TrySetSlotLocked(string deadDropGuid, int slotIndex, bool locked) =>
-            Release1SmallCourtesyWorldMutationStatus.Succeeded;
-
-        public Release1SmallCourtesyWorldMutationStatus TryChangeSlotQuantity(string deadDropGuid, int slotIndex, int amount)
-        {
-            if (ThrowOnMutation) throw new InvalidOperationException("Keep the Lights Off never changes a dead drop slot's quantity.");
-            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryInsertPackagedProduct(
-            string deadDropGuid, int slotIndex, string productId, string packagingId, int quantity, out string reason)
-        {
-            if (ThrowOnMutation) throw new InvalidOperationException("Keep the Lights Off never inserts packaged product at any drop.");
-            reason = "not used by Keep the Lights Off, which selects nothing at any drop.";
-            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
-        }
-
         // Keep the Lights Off never chooses a location, so it never subscribes to a dead drop
         // closing; throwing here turns an accidental subscription into an immediate test failure.
-        public Release1SmallCourtesyWorldReadStatus TrySubscribeDeadDropClosed(
-            string deadDropGuid,
-            Action<string> callback,
-            out IRelease1SmallCourtesyDropSubscription? subscription)
-        {
-            SubscribeCalled = true;
-            throw new InvalidOperationException("Keep the Lights Off never subscribes to a dead drop closing.");
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance)
-        {
-            if (ThrowOnCashReadAfterMutation && CashChanges > 0)
-                throw new InvalidOperationException("synthetic post-payment read failure");
-            if (_cashReadUnavailableArmed)
-            {
-                if (!_cashReadUnavailableSkippedOnce) _cashReadUnavailableSkippedOnce = true;
-                else
-                {
-                    _cashReadUnavailableArmed = false;
-                    _cashReadUnavailableSkippedOnce = false;
-                    balance = 0f;
-                    return Release1SmallCourtesyWorldReadStatus.Unavailable;
-                }
-            }
-            if (_cashDriftArmed)
-            {
-                if (!_cashDriftSkippedOnce) _cashDriftSkippedOnce = true;
-                else { CashBalance += _cashDriftOnSecondRead; _cashDriftArmed = false; _cashDriftSkippedOnce = false; }
-            }
-            balance = CashBalance;
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryChangeCashBalance(float amount)
-        {
-            if (ThrowOnCashChange) throw new InvalidOperationException("synthetic cash mutation failure");
-            CapturePreSaveCashSnapshotIfNeeded();
-            CashBalance += amount;
-            CashChanges++;
-            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
-        }
 
         // Keep the Lights Off never debits the wallet either; this fake is not Chief-specific.
-        public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount) => throw new NotSupportedException();
-        public Release1SmallCourtesyWorldMutationStatus TryEngageLockdown(out string reason) { reason = string.Empty; throw new NotSupportedException(); }
-        public Release1SmallCourtesyWorldMutationStatus TryReleaseLockdown(out string reason) { reason = string.Empty; throw new NotSupportedException(); }
-
-        // Keep the Lights Off never reads or moves cash inside a dead drop slot; the mission pays
-        // out of the player wallet only. Reporting Unavailable and Rejected keeps an accidental
-        // call inert rather than silently succeeding.
-        public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlotCashBalance(string deadDropGuid, int slotIndex, out float balance)
-        {
-            balance = 0f;
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryChangeDeadDropSlotCashBalance(string deadDropGuid, int slotIndex, float amount) =>
-            Release1SmallCourtesyWorldMutationStatus.Rejected;
-
-        public Release1SmallCourtesyWorldReadStatus TryReadHoldRoomSlotCashBalance(string closetGuid, int slotIndex, out float balance)
-        {
-            balance = 0f;
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TrySetHoldRoomSlotLocked(string closetGuid, int slotIndex, bool locked) =>
-            Release1SmallCourtesyWorldMutationStatus.Rejected;
-
-        public Release1SmallCourtesyWorldMutationStatus TryChangeHoldRoomSlotCashBalance(string closetGuid, int slotIndex, float amount) =>
-            Release1SmallCourtesyWorldMutationStatus.Rejected;
-
-        public Release1SmallCourtesyWorldReadStatus TryReadFieldContact(string contactId, out Release1FieldContactSnapshot snapshot)
-        { snapshot = Release1FieldContactSnapshot.Unavailable(); return Release1SmallCourtesyWorldReadStatus.Unavailable; }
-
-        public Release1SmallCourtesyWorldMutationStatus TryDespawnFieldContact(string contactId, out string reason)
-        { reason = "this fake never despawns a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-
-        public Release1SmallCourtesyWorldMutationStatus TryProvokeFieldContact(string contactId, out string reason)
-        { reason = "this fake never provokes a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-
-        public Release1SmallCourtesyWorldMutationStatus TryParkFieldContact(string contactId, out string reason)
-        { reason = "this fake never parks a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-        public Release1SmallCourtesyWorldMutationStatus TryUnparkFieldContact(string contactId, float aheadMetres, out string reason)
-        { reason = "this fake never unparks a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
 
         // Task 5 completion knobs. Cash mutations are counted, and the balance a real native save
         // would durably capture is snapshotted lazily on the first mutation since the last

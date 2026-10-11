@@ -1,3 +1,4 @@
+using OrganizedCrime.Model;
 using OrganizedCrime.PostBenziesProof;
 using OrganizedCrime.Runtime;
 using Xunit;

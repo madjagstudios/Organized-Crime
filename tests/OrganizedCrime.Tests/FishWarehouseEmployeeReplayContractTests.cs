@@ -32,6 +32,50 @@ public sealed class FishWarehouseEmployeeReplayContractTests
     }
 
     [Fact]
+    public void Wrapped_chemist_raw_json_parses_the_expected_state_with_chemist_identity()
+    {
+        // OC-129: all four native types replay now, so the expected-state
+        // parse must stay in agreement with the inspector map for every
+        // supported type.
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            "11111111-1111-1111-1111-111111111111",
+            "ChemistData",
+            "Chemist",
+            ChemistWrappedEmployeeRawJson);
+
+        Assert.True(descriptor.IsSupportedPackager);
+        Assert.True(descriptor.TryParseExpectedState(out var expected, out var failureReason), failureReason);
+        Assert.Equal("Chemist", expected.Identity);
+        Assert.Equal("test_chemist", expected.Id);
+        Assert.Equal("oc_fishwarehouse", expected.PropertyCode);
+        Assert.Equal("22222222-2222-2222-2222-222222222222", expected.HomeGuid);
+        Assert.Empty(expected.StationGuids);
+        Assert.Null(expected.MoveItem);
+        Assert.Equal(string.Empty, expected.SuppliesGuid);
+    }
+
+    [Fact]
+    public void Botanist_raw_json_parses_pots_as_stations_and_supplies()
+    {
+        // The Botanist lists Pots instead of Stations and carries a
+        // Supplies object field; both must reach the expected state.
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            "88888888-8888-8888-8888-888888888888",
+            "BotanistData",
+            "Botanist",
+            BotanistMeasuredRawJson);
+
+        Assert.True(descriptor.IsSupportedPackager);
+        Assert.True(descriptor.TryParseExpectedState(out var expected, out var failureReason), failureReason);
+        Assert.Equal("Botanist", expected.Identity);
+        Assert.Equal("botanist-1", expected.Id);
+        Assert.Equal("oc_fishwarehouse", expected.PropertyCode);
+        Assert.Equal("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", expected.HomeGuid);
+        Assert.Equal(new[] { "cccccccc-cccc-cccc-cccc-cccccccccccc" }, expected.StationGuids);
+        Assert.Equal("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", expected.SuppliesGuid);
+    }
+
+    [Fact]
     public void Measured_live_packager_idle_move_item_defaults_are_not_expected_as_active()
     {
         var descriptor = new FishWarehouseEmployeeReplayDescriptor(
@@ -268,6 +312,62 @@ public sealed class FishWarehouseEmployeeReplayContractTests
         Assert.Equal(10, expectedEmployees.Select(employee => employee.expected.MoveItem!.DestinationGuid).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
+    [Fact]
+    public void Packager_without_a_bed_section_parses_as_unassigned()
+    {
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            EmployeeGuid,
+            "PackagerData",
+            "Packager",
+            ObjectShapedPackagerRawJson.Replace(
+                "\"Bed\":{\"ObjectGUID\":\"00000000-0000-0000-0000-000000000222\"},",
+                string.Empty,
+                StringComparison.Ordinal));
+
+        var parsed = descriptor.TryParseExpectedState(out var expected, out var failureReason);
+
+        Assert.True(parsed, failureReason);
+        Assert.Empty(expected.HomeGuid);
+    }
+
+    [Fact]
+    public void Packager_without_a_configuration_entry_parses_as_unassigned()
+    {
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            EmployeeGuid,
+            "PackagerData",
+            "Packager",
+            ObjectShapedPackagerRawJson.Replace(
+                "\"Name\":\"Configuration\"",
+                "\"Name\":\"Relationship\"",
+                StringComparison.Ordinal));
+
+        var parsed = descriptor.TryParseExpectedState(out var expected, out var failureReason);
+
+        Assert.True(parsed, failureReason);
+        Assert.Empty(expected.HomeGuid);
+        Assert.Empty(expected.StationGuids);
+    }
+
+    [Fact]
+    public void Packager_without_a_stations_section_parses_with_no_stations()
+    {
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            EmployeeGuid,
+            "PackagerData",
+            "Packager",
+            ObjectShapedPackagerRawJson.Replace(
+                ",\"Stations\":{\"ObjectGUIDs\":[\"00000000-0000-0000-0000-000000000333\",\"00000000-0000-0000-0000-000000000444\",\"00000000-0000-0000-0000-000000000555\"]}",
+                string.Empty,
+                StringComparison.Ordinal));
+
+        var parsed = descriptor.TryParseExpectedState(out var expected, out var failureReason);
+
+        Assert.True(parsed, failureReason);
+        Assert.Empty(expected.StationGuids);
+        Assert.Equal("00000000-0000-0000-0000-000000000222", expected.HomeGuid);
+    }
+
     private static string GuidFor(int value) => $"00000000-0000-0000-0000-{value:000000000000}";
 
     private static string PackagerRawJsonWithStations(params string[] stationGuids)
@@ -327,5 +427,35 @@ public sealed class FishWarehouseEmployeeReplayContractTests
             {"Name":"Configuration","Contents":"{\"Bed\":{\"ObjectGUID\":\"00000000-0000-0000-0000-000000000222\"},\"Stations\":{\"ObjectGUIDs\":[\"00000000-0000-0000-0000-000000000333\",\"00000000-0000-0000-0000-000000000444\",\"00000000-0000-0000-0000-000000000555\"]}}"}
           ]
         }
+        """;
+
+    // OC-129: a BotanistData record in the measured shape (Pots plus a
+    // Supplies object field); also used by the replay host tests.
+    private const string BotanistMeasuredRawJson = """
+        {
+          "DataType":"BotanistData",
+          "BaseData":{
+            "GUID":"88888888-8888-8888-8888-888888888888",
+            "ID":"botanist-1",
+            "FirstName":"Fern",
+            "LastName":"Foliage",
+            "IsMale":false,
+            "AppearanceIndex":3,
+            "Position":{"x":1,"y":2,"z":3},
+            "Rotation":{"x":0,"y":0,"z":0,"w":1},
+            "AssignedProperty":"oc_fishwarehouse",
+            "PaidForToday":true,
+            "BedGUID":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "AdditionalDatas":[
+            {"Name":"Configuration","Contents":{"Bed":{"ObjectGUID":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},"Supplies":{"ObjectGUID":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"},"Pots":{"ObjectGUIDs":["cccccccc-cccc-cccc-cccc-cccccccccccc"]}}}
+          ]
+        }
+        """;
+
+    // The ChemistData employee record from the sanitized OC-128 preserved
+    // file: 0.4.7 wrapped BaseData with no Identity key.
+    private const string ChemistWrappedEmployeeRawJson = """
+        {"DataType":"ChemistData","DataVersion":0,"GameVersion":"0.4.7f6","BaseData":"{\"DataType\":\"ChemistData\",\"DataVersion\":0,\"GameVersion\":\"0.4.7f6\",\"ID\":\"test_chemist\",\"AssignedProperty\":\"oc_fishwarehouse\",\"FirstName\":\"Test\",\"LastName\":\"Chemist\",\"IsMale\":true,\"AppearanceIndex\":6,\"Position\":{\"x\":1,\"y\":2,\"z\":3},\"Rotation\":{\"x\":0,\"y\":0,\"z\":0,\"w\":1},\"GUID\":\"11111111-1111-1111-1111-111111111111\",\"PaidForToday\":false,\"MoveItemData\":{\"TemplateItemJSON\":\"\",\"GrabbedItemQuantity\":0,\"SourceGUID\":\"\",\"DestinationGUID\":\"\"}}","AdditionalDatas":[{"Name":"Relationship","Contents":"{\"RelationDelta\":0}"},{"Name":"Configuration","Contents":"{\"DataType\":\"ChemistConfigurationData\",\"Bed\":{\"ObjectGUID\":\"22222222-2222-2222-2222-222222222222\"},\"Stations\":{\"ObjectGUIDs\":[]}}"}]}
         """;
 }

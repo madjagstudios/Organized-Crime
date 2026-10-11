@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using OrganizedCrime.Model;
 using OrganizedCrime.Runtime;
 using Xunit;
@@ -129,7 +130,7 @@ public sealed class Release1SmallCourtesyCompositionTests
         composition.OnSaveComplete();
     }
 
-    private sealed class DisposableWorld : IRelease1SmallCourtesyWorld, IDisposable
+    private sealed class DisposableWorld : IDeliveryMissionWorld, IDisposable
     {
         private readonly Release1SmallCourtesyDepositTests.FakeWorld _inner;
         public DisposableWorld(Release1StoryHostContextSnapshot context) => _inner = new(context);
@@ -141,7 +142,6 @@ public sealed class Release1SmallCourtesyCompositionTests
         public Release1SmallCourtesyWorldReadStatus TryReadDeadDrops(out IReadOnlyList<Release1SmallCourtesyDropCandidate> drops) => _inner.TryReadDeadDrops(out drops);
         public Release1SmallCourtesyWorldReadStatus TryReadPackaging(Release1SmallCourtesyPackageKind kind, out Release1SmallCourtesyPackagingCandidate packaging) => _inner.TryReadPackaging(kind, out packaging);
         public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlots(string deadDropGuid, out IReadOnlyList<Release1SmallCourtesySlotSnapshot> slots) => _inner.TryReadDeadDropSlots(deadDropGuid, out slots);
-        public Release1SmallCourtesyWorldReadStatus TryReadHoldRoom(out Release1HoldRoomSnapshot room) => _inner.TryReadHoldRoom(out room);
         public Release1SmallCourtesyWorldMutationStatus TrySetSlotLocked(string deadDropGuid, int slotIndex, bool locked) => _inner.TrySetSlotLocked(deadDropGuid, slotIndex, locked);
         public Release1SmallCourtesyWorldMutationStatus TryChangeSlotQuantity(string deadDropGuid, int slotIndex, int amount) => _inner.TryChangeSlotQuantity(deadDropGuid, slotIndex, amount);
         public Release1SmallCourtesyWorldMutationStatus TryInsertPackagedProduct(string deadDropGuid, int slotIndex, string productId, string packagingId, int quantity, out string reason) => _inner.TryInsertPackagedProduct(deadDropGuid, slotIndex, productId, packagingId, quantity, out reason);
@@ -149,18 +149,5 @@ public sealed class Release1SmallCourtesyCompositionTests
         public Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance) => _inner.TryReadCashBalance(out balance);
         public Release1SmallCourtesyWorldMutationStatus TryChangeCashBalance(float amount) => _inner.TryChangeCashBalance(amount);
         public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount) => _inner.TryDebitCashBalance(amount);
-        public Release1SmallCourtesyWorldMutationStatus TryEngageLockdown(out string reason) => _inner.TryEngageLockdown(out reason);
-        public Release1SmallCourtesyWorldMutationStatus TryReleaseLockdown(out string reason) => _inner.TryReleaseLockdown(out reason);
-        public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlotCashBalance(string deadDropGuid, int slotIndex, out float balance) => _inner.TryReadDeadDropSlotCashBalance(deadDropGuid, slotIndex, out balance);
-        public Release1SmallCourtesyWorldMutationStatus TryChangeDeadDropSlotCashBalance(string deadDropGuid, int slotIndex, float amount) => _inner.TryChangeDeadDropSlotCashBalance(deadDropGuid, slotIndex, amount);
-        public Release1SmallCourtesyWorldReadStatus TryReadHoldRoomSlotCashBalance(string closetGuid, int slotIndex, out float balance) => _inner.TryReadHoldRoomSlotCashBalance(closetGuid, slotIndex, out balance);
-        public Release1SmallCourtesyWorldMutationStatus TrySetHoldRoomSlotLocked(string closetGuid, int slotIndex, bool locked) => _inner.TrySetHoldRoomSlotLocked(closetGuid, slotIndex, locked);
-        public Release1SmallCourtesyWorldMutationStatus TryChangeHoldRoomSlotCashBalance(string closetGuid, int slotIndex, float amount) => _inner.TryChangeHoldRoomSlotCashBalance(closetGuid, slotIndex, amount);
-        public Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity) => _inner.TryReadProductionActivity(out activity);
-        public Release1SmallCourtesyWorldReadStatus TryReadFieldContact(string contactId, out Release1FieldContactSnapshot snapshot) => _inner.TryReadFieldContact(contactId, out snapshot);
-        public Release1SmallCourtesyWorldMutationStatus TryDespawnFieldContact(string contactId, out string reason) => _inner.TryDespawnFieldContact(contactId, out reason);
-        public Release1SmallCourtesyWorldMutationStatus TryProvokeFieldContact(string contactId, out string reason) => _inner.TryProvokeFieldContact(contactId, out reason);
-        public Release1SmallCourtesyWorldMutationStatus TryParkFieldContact(string contactId, out string reason) => _inner.TryParkFieldContact(contactId, out reason);
-        public Release1SmallCourtesyWorldMutationStatus TryUnparkFieldContact(string contactId, float aheadMetres, out string reason) => _inner.TryUnparkFieldContact(contactId, aheadMetres, out reason);
     }
 }

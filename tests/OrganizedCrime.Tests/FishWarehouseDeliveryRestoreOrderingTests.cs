@@ -5,6 +5,66 @@ namespace OrganizedCrime.Tests;
 
 public sealed class FishWarehouseDeliveryRestoreOrderingTests
 {
+    [Theory]
+    [InlineData("DispatchPrefix")]
+    [InlineData("StatusPrefix")]
+    [InlineData("StatusDisplayPrefix")]
+    public void Client_prefix_passes_through_without_touching_native_delivery_or_gate(string prefixName)
+    {
+        FishWarehouseDeliveryRestorePatch.Reset();
+        var authorityReads = 0;
+        FishWarehouseDeliveryRestorePatch.IsHost = () => { authorityReads++; return false; };
+        try
+        {
+            // No native constructor or valid pointer: any access to delivery
+            // properties would fail in this test host, so the client must exit first.
+            var delivery = (Il2CppScheduleOne.Delivery.DeliveryInstance)
+                System.Runtime.Serialization.FormatterServices.GetUninitializedObject(
+                    typeof(Il2CppScheduleOne.Delivery.DeliveryInstance));
+            GC.SuppressFinalize(delivery); // The placeholder owns no native GC handle.
+            object?[] arguments = prefixName == "StatusPrefix"
+                ? new object?[] { delivery, default(Il2CppScheduleOne.Delivery.EDeliveryStatus) }
+                : new object?[] { null, delivery };
+            var prefix = typeof(FishWarehouseDeliveryRestorePatch).GetMethod(
+                prefixName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+
+            Assert.True((bool)prefix.Invoke(null, arguments)!);
+            Assert.Equal(1, authorityReads);
+            Assert.Equal(0, FishWarehouseDeliveryRestorePatch.FlushIfReady().PendingCount);
+        }
+        finally
+        {
+            FishWarehouseDeliveryRestorePatch.Reset();
+        }
+    }
+
+    [Theory]
+    [InlineData("DispatchPrefix")]
+    [InlineData("StatusPrefix")]
+    [InlineData("StatusDisplayPrefix")]
+    public void Host_prefix_keeps_the_existing_null_delivery_pass_through(string prefixName)
+    {
+        FishWarehouseDeliveryRestorePatch.Reset();
+        var authorityReads = 0;
+        FishWarehouseDeliveryRestorePatch.IsHost = () => { authorityReads++; return true; };
+        try
+        {
+            object?[] arguments = prefixName == "StatusPrefix"
+                ? new object?[] { null, default(Il2CppScheduleOne.Delivery.EDeliveryStatus) }
+                : new object?[] { null, null };
+            var prefix = typeof(FishWarehouseDeliveryRestorePatch).GetMethod(
+                prefixName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+
+            Assert.True((bool)prefix.Invoke(null, arguments)!);
+            Assert.Equal(1, authorityReads);
+            Assert.Equal(0, FishWarehouseDeliveryRestorePatch.FlushIfReady().PendingCount);
+        }
+        finally
+        {
+            FishWarehouseDeliveryRestorePatch.Reset();
+        }
+    }
+
     [Fact]
     public void Flush_outcome_remains_available_when_the_existing_caller_discards_the_return_value()
     {

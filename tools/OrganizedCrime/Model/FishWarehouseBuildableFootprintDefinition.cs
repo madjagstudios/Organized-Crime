@@ -34,11 +34,18 @@ public readonly record struct FishWarehouseFootprintBounds(
 public readonly record struct FishWarehouseGridCellCoordinate(int X, int Y);
 
 /// <summary>
-/// The measured Fish Warehouse floor envelope with one native build cell of clearance
-/// from the authored interior edges. Coordinates are local to the Fish Warehouse anchor.
+/// The Fish Warehouse floor envelope derived from OC's own interior room walls.
+/// Coordinates are local to the runtime Property root, created at the authored
+/// Fish Warehouse anchor's world position and rotation.
 /// </summary>
 public sealed class FishWarehouseBuildableFootprintDefinition
 {
+    // Keep cells just off the walls so wall-adjacent footprints stay placeable.
+    public const float WallAllowance = 0.05f;
+    // Fixed Property-local origin; X=0.25 splits the X leftover evenly between the walls.
+    public const float GridOriginX = 0.25f;
+    public const float GridOriginZ = 0f;
+
     private FishWarehouseBuildableFootprintDefinition(
         FishWarehouseFootprintBounds measuredBounds,
         float gridCellSize,
@@ -55,21 +62,34 @@ public sealed class FishWarehouseBuildableFootprintDefinition
     public float GridCellSize { get; }
     public int ClearanceCells { get; }
 
+    public FishWarehousePoint GetPropertyLocalCellCenter(
+        FishWarehouseGridCellCoordinate coordinate,
+        float planeHeight)
+    {
+        if (!float.IsFinite(planeHeight))
+            throw new ArgumentOutOfRangeException(nameof(planeHeight), "The Grid plane height must be finite.");
+
+        return new FishWarehousePoint(
+            GridOriginX + (coordinate.X * GridCellSize),
+            planeHeight,
+            GridOriginZ + (coordinate.Y * GridCellSize));
+    }
+
     public static FishWarehouseBuildableFootprintDefinition CreateMeasured(float gridCellSize)
     {
         if (!float.IsFinite(gridCellSize) || gridCellSize <= 0f)
             throw new ArgumentOutOfRangeException(nameof(gridCellSize), "The native grid cell size must be finite and positive.");
 
-        // Derived from the four live geometry measurements recorded during the footprint probe.
+        // Bounds follow OC's own interior room so the walls stop rejecting nearby items.
         var measuredBounds = new FishWarehouseFootprintBounds(
-            MinimumX: -11.244f,
-            MaximumX: 11.244f,
-            MinimumZ: -6.526f,
-            MaximumZ: 6.772f);
+            MinimumX: -(FishWarehouseInteriorRoomDefinition.HalfWidth - WallAllowance),
+            MaximumX: FishWarehouseInteriorRoomDefinition.HalfWidth - WallAllowance,
+            MinimumZ: -(FishWarehouseInteriorRoomDefinition.HalfDepth - WallAllowance),
+            MaximumZ: FishWarehouseInteriorRoomDefinition.HalfDepth - WallAllowance);
         return new FishWarehouseBuildableFootprintDefinition(
             measuredBounds,
             gridCellSize,
-            clearanceCells: 1);
+            clearanceCells: 0);
     }
 
     public bool ContainsPlacementPoint(FishWarehousePoint point) =>
@@ -114,10 +134,9 @@ public sealed class FishWarehouseBuildableFootprintDefinition
         allowedCoordinates is not null && allowedCoordinates.Contains(coordinate);
 
     /// <summary>
-    /// Returns the native integer coordinates whose cell centers are measured from an existing
-    /// reference cell and whose complete cells fit inside the measured, one-cell-inset envelope.
-    /// The reference cell is intentionally supplied by the runtime source grid so this model does
-    /// not assume a world-space origin or a particular authored grid size.
+    /// Returns native integer coordinates whose cell centers are measured from the supplied
+    /// reference cell and whose complete cells fit inside the room-derived envelope.
+    /// Fish Warehouse layout uses its fixed Property-local origin as the reference cell.
     /// </summary>
     public IReadOnlyList<FishWarehouseGridCellCoordinate> GetAllowedCellCoordinates(
         int referenceCoordinateX,

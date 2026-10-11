@@ -9,4 +9,11 @@ public static class OrganizedCrimeLog
 {
     public static Action<string> Warning { get; set; } = _ => { };
     public static Action<string> Receipt { get; set; } = _ => { };
+    // The mod installs the final diagnostic sink. Engine-free consumers retain
+    // their injected sink, so receipt observations do not require MelonLoader.
+    internal static Action<string>? DiagnosticSink { get; set; }
+    internal static void Diagnostic(string message, Action<string>? fallback = null) =>
+        (DiagnosticSink ?? fallback ?? Receipt)(message);
+    internal static Action FlushWarningSummaries { get; set; } = () => { };
+    internal static Action<string> CommandResponse { get; set; } = message => Receipt(message);
 }

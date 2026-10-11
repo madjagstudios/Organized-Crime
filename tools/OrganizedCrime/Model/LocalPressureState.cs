@@ -33,6 +33,8 @@ public sealed record LocalPressureState
         this.Revision = Revision;
     }
 
+    internal string? LastAppliedRaidCoolingId { get; init; }
+
     public int LocalHeat { get; }
     public bool KnownOffender { get; }
     public double? LastEvidenceGameTime { get; }

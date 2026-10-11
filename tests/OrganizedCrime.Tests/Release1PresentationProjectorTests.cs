@@ -689,6 +689,114 @@ public sealed class Release1PresentationProjectorTests
         Assert.DoesNotContain(harness.Native.Events, e => e.StartsWith("ApplyQuest:", StringComparison.Ordinal));
     }
 
+    // ---- OC-102: persistent faults log once until they clear ------------------------------
+
+    [Fact]
+    public void Persistent_contact_fault_logs_once_across_many_passes()
+    {
+        // On the 0.4.7 beta, S1API failed to create the contacts and this logged the same
+        // contact-check fault once per frame (~2,858 lines in 20 seconds). The per-pass guard
+        // is recreated on every Reconcile() call, so it never dedupes across passes; a
+        // persistent fault must log once per distinct message until it clears instead.
+        var harness = new Harness();
+        harness.ActivateStory(AcceptedStory());
+        harness.Native.ContactStatus = Release1NativePresentationStatus.Faulted;
+        var logs = new List<string>();
+        var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, null, null), logs.Add);
+
+        for (var pass = 0; pass < 100; pass++)
+            projector.Reconcile();
+
+        Assert.Single(logs);
+        Assert.Contains("contact check reported a fault", logs[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Persistent_thrown_contact_fault_logs_once_across_many_passes()
+    {
+        // Same as above, but the boundary throws instead of returning Faulted: the thrown
+        // fault message must also log once across passes, not once per pass.
+        var harness = new Harness();
+        harness.ActivateStory(AcceptedStory());
+        harness.Native.ThrowFrom.Add("TryEnsureContact");
+        var logs = new List<string>();
+        var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, null, null), logs.Add);
+
+        for (var pass = 0; pass < 100; pass++)
+            projector.Reconcile();
+
+        Assert.Single(logs);
+        Assert.Contains("faulted: InvalidOperationException", logs[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Fault_that_clears_and_recurs_is_logged_again()
+    {
+        // A fully successful pass resets the reported set: the fault below clears for one
+        // pass, so its recurrence afterwards is new and must be reported a second time.
+        var harness = new Harness();
+        harness.ActivateStory(AcceptedStory());
+        harness.Native.ContactStatus = Release1NativePresentationStatus.Faulted;
+        var logs = new List<string>();
+        var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, null, null), logs.Add);
+
+        for (var pass = 0; pass < 10; pass++)
+            projector.Reconcile();
+        harness.Native.ContactStatus = Release1NativePresentationStatus.Succeeded;
+        projector.Reconcile();
+        harness.Native.ContactStatus = Release1NativePresentationStatus.Faulted;
+        for (var pass = 0; pass < 10; pass++)
+            projector.Reconcile();
+
+        Assert.Equal(2, logs.Count);
+    }
+
+    [Fact]
+    public void Pre_load_resets_reported_faults()
+    {
+        // A new load reports faults fresh: OnPreLoad clears the reported set, so the same
+        // persistent fault afterwards is reported a second time. The story stays active
+        // across the projector's OnPreLoad (it only touches the native boundary and the
+        // save flag), so Reconcile() keeps running with no reactivation.
+        var harness = new Harness();
+        harness.ActivateStory(AcceptedStory());
+        harness.Native.ContactStatus = Release1NativePresentationStatus.Faulted;
+        var logs = new List<string>();
+        var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, null, null), logs.Add);
+
+        for (var pass = 0; pass < 10; pass++)
+            projector.Reconcile();
+        projector.OnPreLoad();
+        for (var pass = 0; pass < 10; pass++)
+            projector.Reconcile();
+
+        Assert.Equal(2, logs.Count);
+    }
+
+    [Fact]
+    public void Distinct_faults_are_each_reported_once()
+    {
+        // The dedupe key is the message, not the pass: when the contact fault clears but a
+        // faulted decision read takes its place, the new message is reported once, for two
+        // lines total, even though no fully successful pass ran between them.
+        var harness = new Harness();
+        harness.ActivateStory(AcceptedStory());
+        harness.Native.ContactStatus = Release1NativePresentationStatus.Faulted;
+        var logs = new List<string>();
+        var projector = harness.CreateProjector(() => new Release1PresentationInputs(harness.Story.State, false, false, null, null), logs.Add);
+
+        for (var pass = 0; pass < 10; pass++)
+            projector.Reconcile();
+        harness.Native.ContactStatus = Release1NativePresentationStatus.Succeeded;
+        harness.Native.DecisionReadStatus = Release1NativePresentationStatus.Faulted;
+        for (var pass = 0; pass < 10; pass++)
+            projector.Reconcile();
+
+        Assert.Equal(2, logs.Count);
+        Assert.Contains(logs, message => message.Contains("contact check reported a fault", StringComparison.Ordinal));
+        Assert.Contains(logs, message => message.Contains("reported a fault reading the decision", StringComparison.Ordinal));
+    }
+
     // ---- Step 5: Wrong Address quest tests (Task 5) -----------------------------------------
 
     [Fact]
@@ -1096,6 +1204,7 @@ public sealed class Release1PresentationProjectorTests
         public Release1NativePresentationStatus QuestReadStatus = Release1NativePresentationStatus.Succeeded;
         public Release1NativePresentationStatus ApplyQuestStatus = Release1NativePresentationStatus.Succeeded;
         public Action<Release1PresentationCommand>? LastOnChosen;
+        public Dictionary<string, Action> LastLabeledCallbacks { get; } = new();
 
         private void MaybeThrow(string member)
         {
@@ -1148,6 +1257,23 @@ public sealed class Release1PresentationProjectorTests
                     SentMessages.Add(decision.Prompt);
                 ObservedDecision = new Release1ObservedDecision(decision.Id, desiredLabels, decision.Prompt);
                 LastOnChosen = onChosen;
+            }
+            return SetDecisionStatus;
+        }
+
+        public Release1NativePresentationStatus TrySetLabeledDecision(Release1LabeledDecision decision)
+        {
+            Events.Add($"SetLabeledDecision:{decision.Id}");
+            MaybeThrow(nameof(TrySetLabeledDecision));
+            if (SetDecisionStatus == Release1NativePresentationStatus.Succeeded)
+            {
+                var desiredLabels = decision.Options.Select(o => o.Label).ToArray();
+                var existingLabels = ObservedDecision?.Labels ?? Array.Empty<string>();
+                if (!Release1NativePresentationSupport.ShouldBindExistingResponses(existingLabels, desiredLabels))
+                    SentMessages.Add(decision.Prompt);
+                ObservedDecision = new Release1ObservedDecision(decision.Id, desiredLabels, decision.Prompt);
+                LastLabeledCallbacks.Clear();
+                foreach (var option in decision.Options) LastLabeledCallbacks[option.Label] = option.OnChosen;
             }
             return SetDecisionStatus;
         }

@@ -1,3 +1,5 @@
+using OrganizedCrime.Runtime.Release1.World;
+using OrganizedCrime.Core.Diagnostics;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
@@ -24,7 +26,7 @@ public sealed class Release1TheEnvelopeMissionService : IDisposable
     };
 
     private readonly Release1StoryRuntimeService _story;
-    private readonly IRelease1SmallCourtesyWorld _world;
+    private readonly IEnvelopeMissionWorld _world;
     private readonly Release1PhoneCallService? _phone;
     private readonly Action<string> _log;
     private bool _loadActive;
@@ -34,13 +36,13 @@ public sealed class Release1TheEnvelopeMissionService : IDisposable
     private Release1TheEnvelopeQuote? _reviewedQuote;
     private double? _lastConvergenceGameMinute;
     private long _lastConvergenceRevision = -1;
-    private readonly HashSet<string> _reportedHolds = new(StringComparer.Ordinal);
+    private readonly OnceLog _reportedHolds;
     private string? _lockedClosetGuid;
     private readonly List<int> _lockedSlotIndexes = new();
 
     public Release1TheEnvelopeMissionService(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IEnvelopeMissionWorld world,
         Release1PhoneCallService? phone = null,
         Action<string>? log = null)
     {
@@ -48,6 +50,7 @@ public sealed class Release1TheEnvelopeMissionService : IDisposable
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _phone = phone;
         _log = log ?? (_ => { });
+        _reportedHolds = new OnceLog(_log);
     }
 
     public Release1TheEnvelopeOfferStatus OfferStatus { get; private set; } = Release1TheEnvelopeOfferStatus.Inactive;
@@ -67,7 +70,7 @@ public sealed class Release1TheEnvelopeMissionService : IDisposable
         _dismissed = false;
         _reviewedQuote = null;
         _lastConvergenceGameMinute = null;
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         RefreshOfferStatus();
         Converge();
     }
@@ -81,7 +84,7 @@ public sealed class Release1TheEnvelopeMissionService : IDisposable
         _dismissed = false;
         _reviewedQuote = null;
         _lastConvergenceGameMinute = null;
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         OfferStatus = Release1TheEnvelopeOfferStatus.Inactive;
     }
 
@@ -993,8 +996,7 @@ public sealed class Release1TheEnvelopeMissionService : IDisposable
 
     private void ReportHoldOnce(int attempt, string message)
     {
-        if (!_reportedHolds.Add($"a{attempt}:{message}")) return;
-        _log($"The Envelope attempt {attempt} is holding: {message}");
+        _reportedHolds.Report($"a{attempt}:{message}", $"The Envelope attempt {attempt} is holding: {message}");
     }
 
     // A slot whose unlock fails or throws keeps its exact lock identity in the list, so the next

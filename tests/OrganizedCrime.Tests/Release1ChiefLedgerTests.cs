@@ -266,4 +266,223 @@ public sealed class Release1ChiefLedgerTests
         var engaged = record with { LockdownAnnouncements = 1, LockdownEngaged = true };
         Assert.Equal(engaged.Revision + 1, Release1ChiefLedger.CoolBelowWatched(engaged).Next.Revision);
     }
+
+    [Fact]
+    public void ChargeLateFee_on_a_new_day_raises_the_round_and_marks_the_day()
+    {
+        var record = Open(1) with { LastLateFeeChargedDay = 5 };
+
+        var decision = Release1ChiefLedger.ChargeLateFee(record, 6);
+
+        Assert.Equal(Release1ChiefAction.ChargeLateFee, decision.Action);
+        Assert.Equal(2, decision.Next.DemandRound);
+        Assert.Equal(6, decision.Next.LastLateFeeChargedDay);
+        Assert.Equal(Release1ChiefState.DemandOpen, decision.Next.State);
+        Assert.Equal(record.Revision + 1, decision.Next.Revision);
+        decision.Next.Validate();
+    }
+
+    [Fact]
+    public void ChargeLateFee_establishes_the_marker_without_charging()
+    {
+        var record = Open(1);
+
+        var decision = Release1ChiefLedger.ChargeLateFee(record, 5);
+
+        Assert.Equal(Release1ChiefAction.None, decision.Action);
+        Assert.Equal(1, decision.Next.DemandRound);
+        Assert.Equal(5, decision.Next.LastLateFeeChargedDay);
+        Assert.Equal(record.Revision + 1, decision.Next.Revision);
+        decision.Next.Validate();
+    }
+
+    [Fact]
+    public void ChargeLateFee_never_charges_twice_in_one_day()
+    {
+        var record = Open(1) with { LastLateFeeChargedDay = 5 };
+
+        var decision = Release1ChiefLedger.ChargeLateFee(record, 5);
+
+        Assert.Equal(Release1ChiefAction.None, decision.Action);
+        Assert.Same(record, decision.Next);
+    }
+
+    [Fact]
+    public void ChargeLateFee_treats_a_clock_that_ran_backwards_as_already_charged()
+    {
+        var record = Open(1) with { LastLateFeeChargedDay = 6 };
+
+        var decision = Release1ChiefLedger.ChargeLateFee(record, 5);
+
+        Assert.Equal(Release1ChiefAction.None, decision.Action);
+        Assert.Same(record, decision.Next);
+    }
+
+    [Fact]
+    public void ChargeLateFee_stops_at_the_cap()
+    {
+        var record = Open(3) with { LastLateFeeChargedDay = 5 };
+
+        var decision = Release1ChiefLedger.ChargeLateFee(record, 6);
+
+        Assert.Equal(Release1ChiefAction.None, decision.Action);
+        Assert.Same(record, decision.Next);
+    }
+
+    [Theory]
+    [InlineData(Release1ChiefState.Adopted)]
+    [InlineData(Release1ChiefState.Paying)]
+    [InlineData(Release1ChiefState.Settled)]
+    public void ChargeLateFee_is_a_no_op_off_unpaid(Release1ChiefState state)
+    {
+        var record = state switch
+        {
+            Release1ChiefState.Adopted => Release1ChiefRecord.Adopt(LocalPressureTier.Quiet, false),
+            Release1ChiefState.Paying => Paying(1),
+            _ => Settled(1),
+        };
+
+        var decision = Release1ChiefLedger.ChargeLateFee(record, 6);
+
+        Assert.Equal(Release1ChiefAction.None, decision.Action);
+        Assert.Same(record, decision.Next);
+    }
+
+    [Fact]
+    public void ChargeLateFee_charges_a_declined_demand_and_leaves_it_declined()
+    {
+        var declined = Release1ChiefLedger.Decline(Open(1)).Next with { LastLateFeeChargedDay = 5 };
+
+        var decision = Release1ChiefLedger.ChargeLateFee(declined, 6);
+
+        Assert.Equal(Release1ChiefAction.ChargeLateFee, decision.Action);
+        Assert.Equal(2, decision.Next.DemandRound);
+        Assert.Equal(Release1ChiefState.Declined, decision.Next.State);
+        decision.Next.Validate();
+    }
+
+    [Fact]
+    public void An_arrest_step_on_top_of_a_fee_step_stays_capped()
+    {
+        var record = Open(1) with { LastLateFeeChargedDay = 5 };
+        var firstFee = Release1ChiefLedger.ChargeLateFee(record, 6).Next;
+        var secondFee = Release1ChiefLedger.ChargeLateFee(firstFee, 7).Next;
+        Assert.Equal(3, secondFee.DemandRound);
+
+        var decision = Release1ChiefLedger.Observe(secondFee, Release1ChiefObservedEvent.ArrestObserved);
+
+        Assert.Equal(3, decision.Next.DemandRound);
+        decision.Next.Validate();
+    }
+
+    [Fact]
+    public void A_fee_step_preserves_correlations_and_effect_linkage()
+    {
+        var authorization = Release1LogicalCorrelation.Create(
+            "player-1", Release1MissionCatalog.ChiefCampbell, 1,
+            Release1TransitionKind.ChiefPaymentAccepted, "chief-pay-r1-c2").Value;
+        var record = Open(1) with
+        {
+            LastLateFeeChargedDay = 5,
+            AcceptedLogicalCorrelations = new[] { authorization },
+            NativeEffectIds = new[] { Release1ChiefEffect.EffectId(1, 2) },
+        };
+
+        var decision = Release1ChiefLedger.ChargeLateFee(record, 6);
+
+        Assert.Equal(new[] { authorization }, decision.Next.AcceptedLogicalCorrelations);
+        Assert.Equal(new[] { Release1ChiefEffect.EffectId(1, 2) }, decision.Next.NativeEffectIds);
+        decision.Next.Validate();
+    }
+
+    [Fact]
+    public void A_fresh_demand_open_resets_the_late_fee_marker()
+    {
+        var settled = Settled(1) with { LastLateFeeChargedDay = 9 };
+
+        var decision = Release1ChiefLedger.Observe(settled, Release1ChiefObservedEvent.ArrestObserved);
+
+        Assert.Equal(Release1ChiefState.DemandOpen, decision.Next.State);
+        Assert.Null(decision.Next.LastLateFeeChargedDay);
+    }
+
+    [Fact]
+    public void An_arrest_reopen_keeps_the_late_fee_marker()
+    {
+        var declined = Release1ChiefLedger.Decline(Open(1)).Next with { LastLateFeeChargedDay = 5 };
+
+        var decision = Release1ChiefLedger.Observe(declined, Release1ChiefObservedEvent.ArrestObserved);
+
+        Assert.Equal(Release1ChiefState.DemandOpen, decision.Next.State);
+        Assert.Equal(2, decision.Next.DemandRound);
+        Assert.Equal(5, decision.Next.LastLateFeeChargedDay);
+    }
+
+    [Fact]
+    public void ChargeLateFee_counts_each_raise()
+    {
+        var record = Open(1) with { LastLateFeeChargedDay = 5 };
+
+        var first = Release1ChiefLedger.ChargeLateFee(record, 6).Next;
+        var second = Release1ChiefLedger.ChargeLateFee(first, 7).Next;
+
+        Assert.Equal(1, first.LateFeesCharged);
+        Assert.Equal(2, second.LateFeesCharged);
+    }
+
+    [Fact]
+    public void ChargeLateFee_establish_leaves_the_count_alone()
+    {
+        var decision = Release1ChiefLedger.ChargeLateFee(Open(1), 5);
+
+        Assert.Equal(0, decision.Next.LateFeesCharged);
+    }
+
+    [Fact]
+    public void A_fresh_demand_open_resets_the_late_fee_count()
+    {
+        var settled = Settled(1) with { LastLateFeeChargedDay = 9, LateFeesCharged = 2 };
+
+        var decision = Release1ChiefLedger.Observe(settled, Release1ChiefObservedEvent.ArrestObserved);
+
+        Assert.Equal(0, decision.Next.LateFeesCharged);
+    }
+
+    [Fact]
+    public void An_arrest_reopen_keeps_the_late_fee_count()
+    {
+        var declined = Release1ChiefLedger.Decline(Open(1)).Next with { LastLateFeeChargedDay = 5, LateFeesCharged = 1 };
+
+        var decision = Release1ChiefLedger.Observe(declined, Release1ChiefObservedEvent.ArrestObserved);
+
+        Assert.Equal(1, decision.Next.LateFeesCharged);
+    }
+
+    [Fact]
+    public void EffectId_carries_the_shared_prefix()
+    {
+        Assert.Equal("chief-campbell-cash-v1-", Release1ChiefEffect.EffectIdPrefix);
+        Assert.Equal("chief-campbell-cash-v1-r1-c2", Release1ChiefEffect.EffectId(1, 2));
+    }
+
+    [Theory]
+    [InlineData("chief-campbell-cash-v1-r1-c2", Release1MissionCatalog.ChiefCampbell, true)]
+    [InlineData("chief-campbell-cash-v1-r1-c2", Release1MissionCatalog.SmallCourtesy, false)]
+    [InlineData("small-courtesy-reward-v1-a1", Release1MissionCatalog.ChiefCampbell, false)]
+    [InlineData("small-courtesy-reward-v1-a1", Release1MissionCatalog.SmallCourtesy, false)]
+    public void IsCashEffect_matches_the_prefix_and_the_mission_key(string effectId, string missionKey, bool expected)
+    {
+        var effect = new Release1NativeEffectJournalEntry(
+            effectId, missionKey, 1, Release1ChiefEffect.Kind,
+            Release1ChiefEffect.WalletSource, Release1ChiefEffect.Scope, "25000",
+            Release1NativeEffectPhase.Applied, "native-1", 1);
+
+        Assert.Equal(expected, Release1ChiefEffect.IsCashEffect(effect));
+    }
+
+    [Fact]
+    public void IsCashEffect_rejects_null()
+    {
+        Assert.Throws<ArgumentNullException>(() => Release1ChiefEffect.IsCashEffect(null!));
+    }
 }

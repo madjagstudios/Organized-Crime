@@ -9,7 +9,7 @@ public sealed class FishWarehouseDiagnosticBoundaryTests
     public void Obsolete_warehouse_controls_and_diagnostic_surfaces_are_absent()
     {
         string repositoryRoot = FindRepositoryRoot();
-        string modSource = File.ReadAllText(Path.Combine(repositoryRoot, "tools", "OrganizedCrime", "Mod.cs"));
+        string qaKeysSource = File.ReadAllText(Path.Combine(repositoryRoot, "tools", "OrganizedCrime", "Runtime", "Qa", "OwnerQaKeys.cs"));
         string organizedCrimeSource = string.Join(
             Environment.NewLine,
             Directory.EnumerateFiles(
@@ -25,8 +25,8 @@ public sealed class FishWarehouseDiagnosticBoundaryTests
         // KeyCode.F3, F4 and F5 are the OC-69 field contact spike keys, all gated on
         // _ownerQaKeysEnabled alongside F8. KeyCode.F12 stays banned because it is the Steam
         // screenshot key, and KeyCode.F7 stays banned alongside it.
-        Assert.DoesNotContain("KeyCode.F12", modSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("KeyCode.F7", modSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("KeyCode.F12", qaKeysSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("KeyCode.F7", qaKeysSource, StringComparison.Ordinal);
 
         foreach (string obsoleteSymbol in new[]
                  {

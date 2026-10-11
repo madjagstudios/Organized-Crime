@@ -319,17 +319,14 @@ public sealed class Release1ChiefSettledDrainRegressionTests
         }
     }
 
-    /// <summary>Mirrors Release1ProductionOnlyWorld's own Chief-relevant subset exactly.</summary>
-    private sealed class CompositionFakeWorld : Release1ProductionOnlyWorld
+    /// <summary>Mirrors Release1ChiefWorldStub's own Chief-relevant subset exactly.</summary>
+    private sealed class CompositionFakeWorld : Release1ChiefWorldStub
     {
         public float CashBalance { get; set; } = 100_000f;
         public double? TotalMinutes { get; set; } = 0d;
         public int DebitCalls { get; private set; }
         public float? LastDebitAmount { get; private set; }
         public Release1SmallCourtesyWorldMutationStatus DebitResult { get; set; } = Release1SmallCourtesyWorldMutationStatus.Succeeded;
-
-        public override Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity) =>
-            throw new NotSupportedException();
 
         public override Release1SmallCourtesyWorldReadStatus TryReadCanonicalTotalMinutes(out double totalMinutes)
         {
@@ -387,6 +384,7 @@ public sealed class Release1ChiefSettledDrainRegressionTests
         public Release1ObservedDecision? ObservedDecision;
         public int SetDecisionCalls { get; private set; }
         public Action<Release1PresentationCommand>? LastOnChosen { get; private set; }
+        public Dictionary<string, Action> LastLabeledCallbacks { get; } = new();
 
         public Release1NativePresentationStatus TryEnsureContact() => Release1NativePresentationStatus.Succeeded;
 
@@ -417,6 +415,19 @@ public sealed class Release1ChiefSettledDrainRegressionTests
                 SentMessages.Add(decision.Prompt);
             ObservedDecision = new Release1ObservedDecision(decision.Id, desiredLabels, decision.Prompt);
             LastOnChosen = onChosen;
+            return Release1NativePresentationStatus.Succeeded;
+        }
+
+        public Release1NativePresentationStatus TrySetLabeledDecision(Release1LabeledDecision decision)
+        {
+            SetDecisionCalls++;
+            var desiredLabels = decision.Options.Select(o => o.Label).ToArray();
+            var existingLabels = ObservedDecision?.Labels ?? Array.Empty<string>();
+            if (!Release1NativePresentationSupport.ShouldBindExistingResponses(existingLabels, desiredLabels))
+                SentMessages.Add(decision.Prompt);
+            ObservedDecision = new Release1ObservedDecision(decision.Id, desiredLabels, decision.Prompt);
+            LastLabeledCallbacks.Clear();
+            foreach (var option in decision.Options) LastLabeledCallbacks[option.Label] = option.OnChosen;
             return Release1NativePresentationStatus.Succeeded;
         }
 

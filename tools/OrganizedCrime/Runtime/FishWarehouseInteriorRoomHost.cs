@@ -1,4 +1,5 @@
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 using UnityEngine;
 
 namespace OrganizedCrime.Runtime;
@@ -14,9 +15,10 @@ public sealed class FishWarehouseInteriorRoomHost
     private Mesh? _mesh;
     private IReadOnlyList<FishWarehouseWallOpening> _openings = Array.Empty<FishWarehouseWallOpening>();
 
-    public bool IsReady => IsAlive(_root) && IsAlive(_mesh);
+    public bool IsReady => UnityLife.IsAlive(_root) && UnityLife.IsAlive(_mesh);
     public GameObject? Root => IsReady ? _root : null;
     public IReadOnlyList<FishWarehouseWallOpening> Openings => _openings;
+    public Material? SharedMaterial { get; private set; }
 
     public bool TryPrepare(
         Transform anchor,
@@ -77,6 +79,7 @@ public sealed class FishWarehouseInteriorRoomHost
             filter.sharedMesh = _mesh;
             MeshRenderer renderer = _root.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
+            SharedMaterial = material;
             renderer.receiveShadows = true;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
 
@@ -109,6 +112,7 @@ public sealed class FishWarehouseInteriorRoomHost
             _root = null;
             _mesh = null;
             _openings = Array.Empty<FishWarehouseWallOpening>();
+            SharedMaterial = null;
             return false;
         }
     }
@@ -143,6 +147,7 @@ public sealed class FishWarehouseInteriorRoomHost
         _root = null;
         _mesh = null;
         _openings = Array.Empty<FishWarehouseWallOpening>();
+        SharedMaterial = null;
     }
 
     private static MeshData BuildRoomMesh(
@@ -330,18 +335,6 @@ public sealed class FishWarehouseInteriorRoomHost
             new FishWarehouseTransformVector(transform.position.x, transform.position.y, transform.position.z),
             new FishWarehouseTransformVector(transform.eulerAngles.x, transform.eulerAngles.y, transform.eulerAngles.z),
             new FishWarehouseTransformVector(transform.lossyScale.x, transform.lossyScale.y, transform.lossyScale.z));
-
-    private static bool IsAlive(UnityEngine.Object? value)
-    {
-        try
-        {
-            return value is not null && value != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 
     private static Material? FindBrickMaterial(Transform sourceRoot)
     {

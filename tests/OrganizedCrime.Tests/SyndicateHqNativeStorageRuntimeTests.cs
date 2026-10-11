@@ -557,6 +557,98 @@ public sealed class SyndicateHqNativeStorageRuntimeTests
 
     private sealed record FakeEntity(Guid Guid);
 
+    [Fact]
+    public void Closet_quantity_change_and_rename_hold_when_the_runtime_is_not_ready()
+    {
+        var boundary = new FakeBoundary();
+        using var runtime = new SyndicateHqNativeStorageRuntime(boundary);
+        var guid = SyndicateHqStorageContract.Definitions[8].Guid.ToString("D");
+
+        Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Unavailable, runtime.TryChangeClosetSlotQuantity(guid, 0, -5));
+        Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Unavailable, runtime.TrySetClosetStorageName(guid, "Family locker"));
+
+        Assert.Empty(boundary.ClosetQuantityChangeCalls);
+        Assert.Empty(boundary.ClosetRenameCalls);
+    }
+
+    [Fact]
+    public void Closet_quantity_change_and_rename_report_unavailable_for_a_guid_that_is_not_a_retained_contract_closet()
+    {
+        var boundary = new FakeBoundary();
+        using var runtime = new SyndicateHqNativeStorageRuntime(boundary);
+        runtime.BeginLoad(ReadyContext());
+        runtime.PrepareAtVanillaLoadBoundary();
+        runtime.CompleteVanillaLoadBoundary();
+        const string unrelatedGuid = "11111111-2222-3333-4444-555555555555";
+
+        Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Unavailable, runtime.TryChangeClosetSlotQuantity(unrelatedGuid, 0, -5));
+        Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Unavailable, runtime.TrySetClosetStorageName(unrelatedGuid, "Family locker"));
+
+        Assert.Empty(boundary.ClosetQuantityChangeCalls);
+        Assert.Empty(boundary.ClosetRenameCalls);
+    }
+
+    [Fact]
+    public void Closet_quantity_change_and_rename_forward_the_resolved_definition_and_the_exact_arguments()
+    {
+        var boundary = new FakeBoundary();
+        using var runtime = new SyndicateHqNativeStorageRuntime(boundary);
+        runtime.BeginLoad(ReadyContext());
+        runtime.PrepareAtVanillaLoadBoundary();
+        runtime.CompleteVanillaLoadBoundary();
+        var definition = SyndicateHqStorageContract.Definitions[8];
+
+        Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Succeeded, runtime.TryChangeClosetSlotQuantity(definition.Guid.ToString("D"), 3, -5));
+        Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Succeeded, runtime.TrySetClosetStorageName(definition.Guid.ToString("D"), "Family locker"));
+
+        Assert.Equal(new[] { (definition.Guid, 3, -5) }, boundary.ClosetQuantityChangeCalls);
+        Assert.Equal(new[] { (definition.Guid, "Family locker") }, boundary.ClosetRenameCalls);
+    }
+
+    [Fact]
+    public void Save_suspension_disables_all_nine_closets_and_preserves_slots_and_native_entities()
+    {
+        var boundary = new FakeBoundary();
+        using var runtime = new SyndicateHqNativeStorageRuntime(boundary);
+        runtime.BeginLoad(ReadyContext());
+        runtime.PrepareAtVanillaLoadBoundary();
+        Assert.True(runtime.CompleteVanillaLoadBoundary().IsReady);
+        Assert.True(runtime.PlaceAtPocket(new(1000f, 5f, 2000f)).IsReady);
+        foreach (var definition in SyndicateHqStorageContract.Definitions)
+            boundary.SeedClosetSlots(definition.Guid, Enumerable.Range(0, 20)
+                .Select(i => new Release1SmallCourtesySlotSnapshot(i, "product-a", null, 2, false, 1f)).ToArray());
+        var before = runtime.ReadHoldRoom();
+        boundary.InteractionStates.Clear();
+
+        Assert.True(runtime.TrySetSaveInteractions(false));
+        Assert.Equal(Enumerable.Repeat(false, 9), boundary.InteractionStates);
+        Assert.Equal(before.Closets, runtime.ReadHoldRoom().Closets);
+        Assert.True(runtime.CurrentResult.IsReady);
+        Assert.Equal(9, boundary.CreateCalls);
+        Assert.Equal(0, boundary.CleanupCalls);
+        Assert.True(runtime.TrySetSaveInteractions(true));
+        Assert.Equal(Enumerable.Repeat(true, 9), boundary.InteractionStates.TakeLast(9));
+        Assert.Equal(9, boundary.Placements.Count); // visibility resume does not re-place storage
+        Assert.Equal(0, boundary.ReleaseOwnedClosetSlotLocksCalls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Save_visibility_change_with_dead_closet_or_throw_fails_closed(bool throws)
+    {
+        var boundary = new FakeBoundary();
+        using var runtime = new SyndicateHqNativeStorageRuntime(boundary);
+        runtime.BeginLoad(ReadyContext());
+        runtime.PrepareAtVanillaLoadBoundary();
+        Assert.True(runtime.CompleteVanillaLoadBoundary().IsReady);
+        Assert.True(runtime.PlaceAtPocket(new(1000f, 5f, 2000f)).IsReady);
+        if (throws) boundary.ThrowOnSaveInteraction = true;
+        else boundary.FailValidation = true;
+        Assert.False(runtime.TrySetSaveInteractions(false));
+        Assert.Equal(0, boundary.CleanupCalls);
+    }
+
     private sealed class FakeBoundary : ISyndicateHqNativeStorageBoundary
     {
         private readonly bool _gridAvailable;
@@ -586,6 +678,8 @@ public sealed class SyndicateHqNativeStorageRuntimeTests
         public int ResolveCalls { get; private set; }
         public int CreateCalls { get; private set; }
         public int ValidateCalls { get; private set; }
+        public bool FailValidation { get; set; }
+        public bool ThrowOnSaveInteraction { get; set; }
         public int CleanupCalls { get; private set; }
         public int EvictCalls { get; private set; }
         public void EvictRetainedClosetsForLoad() => EvictCalls++;
@@ -606,6 +700,8 @@ public sealed class SyndicateHqNativeStorageRuntimeTests
         public bool ThrowOnClosetCashRead { get; set; }
         public bool ThrowOnClosetLock { get; set; }
         public bool ThrowOnClosetCashChange { get; set; }
+        public List<(Guid Guid, int SlotIndex, int Amount)> ClosetQuantityChangeCalls { get; } = new();
+        public List<(Guid Guid, string Name)> ClosetRenameCalls { get; } = new();
 
         public void SeedRestored(SyndicateHqStorageDefinition definition) =>
             _restoredByGuid[definition.Guid] = new FakeEntity(definition.Guid);
@@ -666,7 +762,7 @@ public sealed class SyndicateHqNativeStorageRuntimeTests
         public bool TryValidate(object entity, SyndicateHqStorageDefinition definition, out string reason)
         {
             ValidateCalls++;
-            var valid = entity is FakeEntity fake &&
+            var valid = !FailValidation && entity is FakeEntity fake &&
                 fake.Guid == definition.Guid &&
                 _slotCount == definition.RequiredSlotCount;
             reason = valid ? "valid" : "invalid";
@@ -688,6 +784,7 @@ public sealed class SyndicateHqNativeStorageRuntimeTests
 
         public void SetInteractionEnabled(object entity, bool enabled)
         {
+            if (ThrowOnSaveInteraction) throw new InvalidOperationException("planned save visibility failure");
             if (_throwOnDisable && !enabled)
                 throw new InvalidOperationException("planned disable failure");
             InteractionStates.Add(enabled);
@@ -744,6 +841,22 @@ public sealed class SyndicateHqNativeStorageRuntimeTests
             reason = "fake closet cash change";
             if (ThrowOnClosetCashChange) throw new InvalidOperationException("planned closet cash change failure");
             return ClosetCashChangeStatus;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TryChangeClosetSlotQuantity(
+            SyndicateHqStorageDefinition definition, int slotIndex, int amount, out string reason)
+        {
+            ClosetQuantityChangeCalls.Add((definition.Guid, slotIndex, amount));
+            reason = "fake closet quantity change";
+            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+        }
+
+        public Release1SmallCourtesyWorldMutationStatus TrySetClosetStorageName(
+            SyndicateHqStorageDefinition definition, string name, out string reason)
+        {
+            ClosetRenameCalls.Add((definition.Guid, name));
+            reason = "fake closet rename";
+            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
         }
 
         public void ReleaseOwnedClosetSlotLocks() => ReleaseOwnedClosetSlotLocksCalls++;

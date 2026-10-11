@@ -6,6 +6,7 @@ namespace OrganizedCrime.Runtime;
 /// Reads the owner QA keys preference from MelonPreferences. Category <c>OrganizedCrime</c>,
 /// entry <c>OwnerQaKeys</c>, default <c>false</c>. When true, the owner's developer key
 /// handlers (Backslash, O, P, and F8) are live regardless of build configuration.
+/// OC-84 also reuses this entry as the diagnostics switch for routine logging.
 /// MelonLoader-dependent, so this file is not linked into the test project.
 /// </summary>
 public static class OwnerQaKeysPreference

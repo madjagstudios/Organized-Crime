@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 15,
+  "state": {
+    "playerId": "76561190000000001",
+    "phase": "Active",
+    "startElapsedDay": 21,
+    "lastProcessedElapsedDay": 21,
+    "revision": 9,
+    "jobBoard": {
+      "openOffer": null,
+      "activeJob": null,
+      "cooldownUntilDay": 2,
+      "lastProcessedDay": 0,
+      "lastTypeOffered": "DeadDrop",
+      "typesSeen": [
+        "DeadDrop"
+      ],
+      "refusalStreak": 0,
+      "nellHintIssued": false,
+      "cooperationVisitIssued": false,
+      "successfulJobs": 1,
+      "successfulJobsSinceWarehousePurchase": 0,
+      "nextOfferId": 2,
+      "lastDeclinedOfferId": null,
+      "lastExpiredOfferId": null,
+      "lastRefusedOfferId": null,
+      "lastCompletedJob": {
+        "jobId": 1,
+        "jobType": "DeadDrop",
+        "reward": 17000
+      },
+      "lastEmergencySupplyOfferId": null,
+      "nextJobId": 2
+    },
+    "ledger": {
+      "entries": [],
+      "lastProcessedDay": 0,
+      "nextId": 1
+    },
+    "cuts": {
+      "entries": [],
+      "lastProcessedDay": 0
+    },
+    "presentationReceipts": [
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/offer-1",
+        "revision": 3
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/job-1-accepted",
+        "revision": 6
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/job-1-completed",
+        "revision": 9
+      }
+    ],
+    "paymentShortfallCount": 0,
+    "warehouseOffer": null,
+    "arthurVisitPending": "None",
+    "arthurVisitMissedEvenings": 0,
+    "arthurVisitLastAttemptedDay": -1,
+    "arthurCooperationDelivered": false,
+    "arthurWarningFollowups": 0,
+    "arthurRanOffs": 0,
+    "arthurBeatings": 0,
+    "activeDemand": null,
+    "madeProductIds": [],
+    "lastDemandWeek": -1,
+    "nextDemandId": 1,
+    "lastDemandOutcome": null,
+    "warehouseCapacityTier": 1,
+    "demandsCompleted": 0,
+    "checkpointTargetCode": "dockswarehouse",
+    "checkpointTargetDay": 21
+  }
+}

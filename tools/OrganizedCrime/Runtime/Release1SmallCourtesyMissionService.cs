@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
@@ -8,7 +9,7 @@ public sealed class Release1SmallCourtesyMissionService : IDisposable
     private const double TimedStageDurationHours = 24d;
 
     private readonly Release1StoryRuntimeService _story;
-    private readonly IRelease1SmallCourtesyWorld _world;
+    private readonly IDeliveryMissionWorld _world;
     private bool _loadActive;
     private bool _saving;
     private bool _dismissed;
@@ -21,7 +22,7 @@ public sealed class Release1SmallCourtesyMissionService : IDisposable
 
     public Release1SmallCourtesyMissionService(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world)
+        IDeliveryMissionWorld world)
     {
         _story = story ?? throw new ArgumentNullException(nameof(story));
         _world = world ?? throw new ArgumentNullException(nameof(world));

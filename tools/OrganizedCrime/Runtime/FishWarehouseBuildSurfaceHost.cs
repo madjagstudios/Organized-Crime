@@ -107,7 +107,7 @@ public sealed class FishWarehouseBuildSurfaceHost
 
             _employeeHome = buildable;
             _employeeHomeComponent = employeeHome;
-            log?.Invoke($"Fish Warehouse employee locker placed (itemId={definition.ItemId}, guid={placedGuid}, grid=({definition.GridX},{definition.GridY}), ParentProperty={parentProperty.PropertyCode}).");
+            OrganizedCrimeLog.Diagnostic($"Fish Warehouse employee locker placed (itemId={definition.ItemId}, guid={placedGuid}, grid=({definition.GridX},{definition.GridY}), ParentProperty={parentProperty.PropertyCode}).", log);
             return true;
         }
         catch (Exception ex)
@@ -132,19 +132,34 @@ public sealed class FishWarehouseBuildSurfaceHost
             return true;
 
         if (parentProperty is null || anchor is null || string.IsNullOrWhiteSpace(gridRootName) || string.IsNullOrWhiteSpace(gridGuid))
+        {
+            var fixedCellZero = new Vector3(
+                FishWarehouseBuildableFootprintDefinition.GridOriginX,
+                GridPlaneOffset,
+                FishWarehouseBuildableFootprintDefinition.GridOriginZ);
+            log?.Invoke(
+                $"Fish Warehouse native build Grid attachment failed safely (sourceProperty=none, tiles=0, " +
+                $"cell00PropertyLocal={FormatPosition(fixedCellZero)}): required Property, anchor, root name, or GUID was unavailable.");
             return false;
+        }
 
         GameObject? staging = null;
         GameObject? clone = null;
         Grid? preparedGrid = null;
+        var sourcePropertyCode = "none";
+        var laidTileCount = 0;
+        var cellZeroPropertyLocal = new Vector3(
+            FishWarehouseBuildableFootprintDefinition.GridOriginX,
+            GridPlaneOffset,
+            FishWarehouseBuildableFootprintDefinition.GridOriginZ);
         try
         {
             if (!Guid.TryParse(gridGuid, out _))
                 throw new InvalidOperationException($"Fish Warehouse build Grid GUID was invalid: {gridGuid}");
 
-            var template = FindLargestOwnedGrid(out var sourceTileCount);
-            if (template is null || template.gameObject is null)
-                throw new InvalidOperationException("No owned native Grid template was available.");
+            var sourceGrid = FindDeterministicSourceGrid(out var sourceTile, out sourcePropertyCode);
+            if (sourceGrid is null || sourceGrid.gameObject is null || sourceTile is null || sourceTile.gameObject is null)
+                throw new InvalidOperationException("No native Grid with a (0,0) Tile was available.");
 
             if (GridAlreadyUsesGuid(gridGuid))
                 throw new InvalidOperationException($"Fish Warehouse build Grid GUID was already present: {gridGuid}");
@@ -153,13 +168,13 @@ public sealed class FishWarehouseBuildSurfaceHost
             staging.transform.SetParent(parentProperty.transform, false);
             staging.SetActive(false);
 
-            clone = UnityEngine.Object.Instantiate(template.gameObject, staging.transform, false);
+            clone = UnityEngine.Object.Instantiate(sourceGrid.gameObject, staging.transform, false);
             clone.name = gridRootName;
             clone.SetActive(false);
 
             var clonedGrid = clone.GetComponent<Grid>();
             if (clonedGrid is null)
-                throw new InvalidOperationException("Owned Grid template clone did not retain its Grid component.");
+                throw new InvalidOperationException("Native Grid source clone did not retain its Grid component.");
             preparedGrid = clonedGrid;
 
             if (!TrySetMember(clonedGrid, "_guid", gridGuid) ||
@@ -168,33 +183,83 @@ public sealed class FishWarehouseBuildSurfaceHost
                 throw new InvalidOperationException("Could not prepare the Grid GUID and ParentProperty before Awake.");
             }
 
-            var tiles = clone.GetComponentsInChildren<Tile>(includeInactive: true);
-            if (tiles.Length == 0)
-                throw new InvalidOperationException("Owned Grid template clone contained no Tile components.");
+            var clonedTiles = clone.GetComponentsInChildren<Tile>(includeInactive: true);
+            if (clonedTiles.Length == 0)
+                throw new InvalidOperationException("Native Grid source clone contained no Tile components to remove.");
 
-            PrepareTiles(clonedGrid, tiles);
-            PositionGrid(clone.transform, parentProperty.transform, tiles);
-            var retainedTiles = BuildMeasuredTileSet(
-                clone.transform,
-                parentProperty.transform,
-                clonedGrid,
-                tiles,
-                Grid.TileSize,
-                out var rejectedTileCount);
-            if (retainedTiles.Length == 0)
-                throw new InvalidOperationException("The measured Fish Warehouse footprint retained no native Grid cells.");
-
-            var employeeHomeDefinition = FishWarehouseEmployeeHomeDefinition.Default;
-            if (!retainedTiles.Any(tile =>
-                    tile.x == employeeHomeDefinition.GridX &&
-                    tile.y == employeeHomeDefinition.GridY))
+            for (var i = 0; i < clonedTiles.Length; i++)
             {
-                throw new InvalidOperationException(
-                    $"The measured Fish Warehouse footprint excluded the restored employee-home cell " +
-                    $"({employeeHomeDefinition.GridX},{employeeHomeDefinition.GridY}).");
+                var clonedTile = clonedTiles[i];
+                if (clonedTile is null || clonedTile.gameObject is null)
+                    continue;
+                if (clonedTile.gameObject == clone)
+                    throw new InvalidOperationException("Native Grid source clone placed a Tile component on its Grid root.");
+
+                UnityEngine.Object.DestroyImmediate(clonedTile.gameObject);
             }
 
+            var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(Grid.TileSize);
+            var allowedCoordinates = footprint.GetAllowedCellCoordinates(
+                referenceCoordinateX: 0,
+                referenceCoordinateY: 0,
+                referenceCenterX: FishWarehouseBuildableFootprintDefinition.GridOriginX,
+                referenceCenterZ: FishWarehouseBuildableFootprintDefinition.GridOriginZ);
+            if (allowedCoordinates.Count == 0)
+                throw new InvalidOperationException("The measured Fish Warehouse footprint produced no native cell coordinates.");
+
+            var employeeHomeDefinition = FishWarehouseEmployeeHomeDefinition.Default;
+            if (!allowedCoordinates.Any(coordinate =>
+                    coordinate.X == employeeHomeDefinition.GridX &&
+                    coordinate.Y == employeeHomeDefinition.GridY))
+            {
+                throw new InvalidOperationException(
+                    $"The measured Fish Warehouse footprint excluded the employee-home cell " +
+                    $"({employeeHomeDefinition.GridX},{employeeHomeDefinition.GridY}).");
+            }
+            if (!allowedCoordinates.Any(coordinate => coordinate.X == 0 && coordinate.Y == 0))
+                throw new InvalidOperationException("The measured Fish Warehouse footprint excluded its fixed (0,0) cell.");
+
+            var gridOrigin = footprint.GetPropertyLocalCellCenter(
+                new FishWarehouseGridCellCoordinate(0, 0),
+                GridPlaneOffset);
+            clone.transform.SetParent(parentProperty.transform, false);
+            clone.transform.localPosition = new Vector3(gridOrigin.X, gridOrigin.Y, gridOrigin.Z);
+            clone.transform.localRotation = Quaternion.identity;
+            clone.transform.localScale = Vector3.one;
+
+            var laidTiles = new List<Tile>(allowedCoordinates.Count);
+            for (var i = 0; i < allowedCoordinates.Count; i++)
+            {
+                var coordinate = allowedCoordinates[i];
+                var localCenter = footprint.GetPropertyLocalCellCenter(coordinate, GridPlaneOffset);
+                var tile = CreateGeneratedTile(
+                    sourceTile,
+                    clone.transform,
+                    parentProperty.transform,
+                    clonedGrid,
+                    coordinate,
+                    localCenter);
+                laidTiles.Add(tile);
+                laidTileCount = laidTiles.Count;
+
+                if (coordinate.X == 0 && coordinate.Y == 0)
+                {
+                    cellZeroPropertyLocal = parentProperty.transform.InverseTransformPoint(tile.transform.position);
+                    var expectedCellZero = new Vector3(gridOrigin.X, gridOrigin.Y, gridOrigin.Z);
+                    if (Vector3.Distance(cellZeroPropertyLocal, expectedCellZero) > 0.001f)
+                    {
+                        throw new InvalidOperationException(
+                            $"The generated (0,0) cell was not at its fixed Property-local point " +
+                            $"(actual={FormatPosition(cellZeroPropertyLocal)}, expected={FormatPosition(expectedCellZero)}).");
+                    }
+                }
+            }
+
+            if (laidTiles.Count != allowedCoordinates.Count)
+                throw new InvalidOperationException($"Generated native Grid tile count mismatch (actual={laidTiles.Count}, expected={allowedCoordinates.Count}).");
+
             DisableNonTileColliders(clone);
+            var retainedTiles = laidTiles.ToArray();
             AddBuildHoverCollider(clone.transform, retainedTiles, Grid.TileSize);
 
             clone.SetActive(true);
@@ -226,14 +291,18 @@ public sealed class FishWarehouseBuildSurfaceHost
             staging = null;
             Physics.SyncTransforms();
 
-            log?.Invoke(
-                $"Fish Warehouse native build Grid enabled (guid={GridGuid}, tiles={TileCount}, " +
-                $"sourceTiles={sourceTileCount}, rejectedTiles={rejectedTileCount}, ParentProperty={parentProperty.PropertyCode}).");
+            OrganizedCrimeLog.Diagnostic(
+                $"Fish Warehouse native build Grid enabled (guid={GridGuid}, sourceProperty={sourcePropertyCode}, " +
+                $"tiles={TileCount}, cell00PropertyLocal={FormatPosition(cellZeroPropertyLocal)}, " +
+                $"ParentProperty={parentProperty.PropertyCode}).", log);
             return true;
         }
         catch (Exception ex)
         {
-            log?.Invoke($"Fish Warehouse native build Grid attachment failed safely: {ex.Message}");
+            var reason = ex.Message.Replace('\r', ' ').Replace('\n', ' ');
+            log?.Invoke(
+                $"Fish Warehouse native build Grid attachment failed safely (sourceProperty={sourcePropertyCode}, " +
+                $"tiles={laidTileCount}, cell00PropertyLocal={FormatPosition(cellZeroPropertyLocal)}): {reason}");
             if (preparedGrid is not null)
             {
                 try
@@ -300,27 +369,49 @@ public sealed class FishWarehouseBuildSurfaceHost
         TileCount = 0;
     }
 
-    private static Grid? FindLargestOwnedGrid(out int tileCount)
+    private static Grid? FindDeterministicSourceGrid(out Tile? referenceTile, out string propertyCode)
     {
-        tileCount = 0;
-        Grid? best = null;
+        referenceTile = null;
+        propertyCode = "none";
         var grids = UnityEngine.Object.FindObjectsOfType<Grid>(includeInactive: true);
+        var candidates = new List<(Grid Grid, Tile Reference, string PropertyCode, string Guid, string Name)>();
         for (var i = 0; i < grids.Length; i++)
         {
             var candidate = grids[i];
             var parent = candidate?.ParentProperty;
-            if (candidate is null || candidate.gameObject is null || parent is null || !parent.IsOwned)
+            if (candidate is null || candidate.gameObject is null || parent is null)
                 continue;
 
-            var count = candidate.GetComponentsInChildren<Tile>(includeInactive: true).Length;
-            if (count <= tileCount)
+            var zeroTile = candidate.GetComponentsInChildren<Tile>(includeInactive: true)
+                .FirstOrDefault(tile =>
+                    tile is not null && tile.gameObject is not null && tile.x == 0 && tile.y == 0);
+            if (zeroTile is null)
                 continue;
 
-            best = candidate;
-            tileCount = count;
+            candidates.Add((
+                candidate,
+                zeroTile,
+                parent.PropertyCode ?? string.Empty,
+                candidate.GUID.ToString(),
+                candidate.gameObject.name));
         }
 
-        return best;
+        if (candidates.Count == 0)
+            return null;
+
+        candidates.Sort((left, right) =>
+        {
+            var comparison = StringComparer.Ordinal.Compare(left.PropertyCode, right.PropertyCode);
+            if (comparison != 0)
+                return comparison;
+            comparison = StringComparer.Ordinal.Compare(left.Guid, right.Guid);
+            return comparison != 0 ? comparison : StringComparer.Ordinal.Compare(left.Name, right.Name);
+        });
+
+        var source = candidates[0];
+        referenceTile = source.Reference;
+        propertyCode = source.PropertyCode;
+        return source.Grid;
     }
 
     private static bool GridAlreadyUsesGuid(string gridGuid)
@@ -333,51 +424,6 @@ public sealed class FishWarehouseBuildSurfaceHost
         }
 
         return false;
-    }
-
-    private static void PrepareTiles(Grid ownerGrid, Tile[] tiles)
-    {
-        for (var i = 0; i < tiles.Length; i++)
-        {
-            var tile = tiles[i];
-            if (tile is null || tile.gameObject is null)
-                continue;
-
-            tile.OwnerGrid = ownerGrid;
-            ClearMember(tile, "BuildableOccupants");
-            ClearMember(tile, "OccupantTiles");
-
-            var renderer = tile.GetComponent<Renderer>();
-            if (renderer is not null)
-                renderer.enabled = false;
-        }
-    }
-
-    private static void PositionGrid(Transform grid, Transform propertyRoot, Tile[] tiles)
-    {
-        var bounds = new Bounds(Vector3.zero, Vector3.zero);
-        var initialized = false;
-        for (var i = 0; i < tiles.Length; i++)
-        {
-            var tile = tiles[i];
-            if (tile is null || tile.transform is null)
-                continue;
-
-            var local = grid.InverseTransformPoint(tile.transform.position);
-            if (!initialized)
-            {
-                bounds = new Bounds(local, Vector3.zero);
-                initialized = true;
-            }
-            else
-            {
-                bounds.Encapsulate(local);
-            }
-        }
-
-        grid.SetParent(propertyRoot, false);
-        grid.localRotation = Quaternion.identity;
-        grid.localPosition = new Vector3(-bounds.center.x, GridPlaneOffset - bounds.center.y, -bounds.center.z);
     }
 
     private static void DisableNonTileColliders(GameObject root)
@@ -534,113 +580,15 @@ public sealed class FishWarehouseBuildSurfaceHost
             grids.Add(grid);
     }
 
-    private static Tile[] BuildMeasuredTileSet(
+    private static Tile CreateGeneratedTile(
+        Tile prototype,
         Transform gridRoot,
         Transform propertyRoot,
         Grid ownerGrid,
-        Tile[] tiles,
-        float gridCellSize,
-        out int rejectedTileCount)
-    {
-        if (gridRoot is null)
-            throw new ArgumentNullException(nameof(gridRoot));
-        if (propertyRoot is null)
-            throw new ArgumentNullException(nameof(propertyRoot));
-        if (ownerGrid is null)
-            throw new ArgumentNullException(nameof(ownerGrid));
-        if (tiles is null || tiles.Length == 0)
-            throw new ArgumentException("The source Grid did not contain any Tile components.", nameof(tiles));
-
-        var footprint = FishWarehouseBuildableFootprintDefinition.CreateMeasured(gridCellSize);
-        var reference = tiles.FirstOrDefault(tile =>
-            tile is not null && tile.transform is not null && tile.x == 0 && tile.y == 0);
-        if (reference is null || reference.transform is null)
-        {
-            throw new InvalidOperationException("The source Grid did not contain the existing (0,0) reference cell.");
-        }
-
-        var referenceLocal = propertyRoot.InverseTransformPoint(reference.transform.position);
-        var allowedCoordinates = footprint.GetAllowedCellCoordinates(
-            referenceCoordinateX: reference.x,
-            referenceCoordinateY: reference.y,
-            referenceCenterX: referenceLocal.x,
-            referenceCenterZ: referenceLocal.z);
-        if (allowedCoordinates.Count == 0)
-            throw new InvalidOperationException("The measured Fish Warehouse footprint produced no native cell coordinates.");
-
-        var sourceByCoordinate = new Dictionary<(int X, int Y), Tile>();
-        for (var i = 0; i < tiles.Length; i++)
-        {
-            var tile = tiles[i];
-            if (tile is null || tile.transform is null || tile.gameObject is null)
-                continue;
-
-            if (!sourceByCoordinate.TryAdd((tile.x, tile.y), tile))
-            {
-                throw new InvalidOperationException($"The source Grid contained duplicate native cell ({tile.x},{tile.y}).");
-            }
-
-            var expectedLocal = new Vector3(
-                referenceLocal.x + ((tile.x - reference.x) * gridCellSize),
-                referenceLocal.y,
-                referenceLocal.z + ((tile.y - reference.y) * gridCellSize));
-            if (Vector3.Distance(propertyRoot.InverseTransformPoint(tile.transform.position), expectedLocal) > 0.02f)
-            {
-                throw new InvalidOperationException(
-                    $"The source Grid coordinate spacing was not representable from the (0,0) cell ({tile.x},{tile.y}).");
-            }
-        }
-
-        var retained = new List<Tile>(allowedCoordinates.Count);
-        var allowedSet = new HashSet<(int X, int Y)>();
-        for (var i = 0; i < allowedCoordinates.Count; i++)
-        {
-            var coordinate = allowedCoordinates[i];
-            if (!allowedSet.Add((coordinate.X, coordinate.Y)))
-                throw new InvalidOperationException($"The measured footprint produced duplicate native cell ({coordinate.X},{coordinate.Y}).");
-
-            if (sourceByCoordinate.TryGetValue((coordinate.X, coordinate.Y), out var existing))
-            {
-                retained.Add(existing);
-                continue;
-            }
-
-            var generated = CreateGeneratedTile(
-                reference,
-                gridRoot,
-                ownerGrid,
-                coordinate,
-                referenceLocal,
-                gridCellSize);
-            retained.Add(generated);
-        }
-
-        rejectedTileCount = 0;
-        for (var i = 0; i < tiles.Length; i++)
-        {
-            var tile = tiles[i];
-            if (tile is null || tile.transform is null || tile.gameObject is null)
-                continue;
-
-            if (!allowedSet.Contains((tile.x, tile.y)))
-            {
-                tile.gameObject.SetActive(false);
-                rejectedTileCount++;
-            }
-        }
-
-        return retained.ToArray();
-    }
-
-    private static Tile CreateGeneratedTile(
-        Tile reference,
-        Transform gridRoot,
-        Grid ownerGrid,
         FishWarehouseGridCellCoordinate coordinate,
-        Vector3 referenceLocal,
-        float gridCellSize)
+        FishWarehousePoint propertyLocalCenter)
     {
-        var generatedObject = UnityEngine.Object.Instantiate(reference.gameObject, gridRoot, false);
+        var generatedObject = UnityEngine.Object.Instantiate(prototype.gameObject, gridRoot, false);
         generatedObject.name = $"Grid [{coordinate.X},{coordinate.Y}]";
         generatedObject.SetActive(false);
 
@@ -648,13 +596,10 @@ public sealed class FishWarehouseBuildSurfaceHost
         if (generated is null || generated.transform is null)
             throw new InvalidOperationException($"Generated native Grid cell ({coordinate.X},{coordinate.Y}) did not retain its Tile component.");
 
-        var generatedLocal = gridRoot.InverseTransformPoint(
-            gridRoot.parent!.TransformPoint(referenceLocal));
-        generatedLocal.x += (coordinate.X - reference.x) * gridCellSize;
-        generatedLocal.z += (coordinate.Y - reference.y) * gridCellSize;
-        generated.transform.localPosition = generatedLocal;
-        generated.InitializePropertyTile(coordinate.X, coordinate.Y, reference.AvailableOffset, ownerGrid);
+        generated.InitializePropertyTile(coordinate.X, coordinate.Y, prototype.AvailableOffset, ownerGrid);
         generated.OwnerGrid = ownerGrid;
+        generated.transform.position = propertyRoot.TransformPoint(
+            new Vector3(propertyLocalCenter.X, propertyLocalCenter.Y, propertyLocalCenter.Z));
         ClearMember(generated, "BuildableOccupants");
         ClearMember(generated, "OccupantTiles");
 
@@ -662,14 +607,14 @@ public sealed class FishWarehouseBuildSurfaceHost
         if (renderer is not null)
             renderer.enabled = false;
 
-        // The clone is inactive while it is being initialized so native Tile state can be
-        // assigned before registration. It must be reactivated before the Grid becomes visible;
-        // otherwise only the source/template cells participate in physics and the generated
-        // perimeter is visually present in the topology but unavailable to build intersections.
+        // Initialize the clone while inactive, then activate it so its collider participates in physics.
         generatedObject.SetActive(true);
 
         return generated;
     }
+
+    private static string FormatPosition(Vector3 position) =>
+        FormattableString.Invariant($"({position.x:0.000},{position.y:0.000},{position.z:0.000})");
 
 
 

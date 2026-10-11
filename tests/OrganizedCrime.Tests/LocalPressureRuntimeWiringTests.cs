@@ -1,95 +1,116 @@
+using OrganizedCrime.Runtime.Composition;
 using Xunit;
 
 namespace OrganizedCrime.Tests;
 
+[Collection("OC-151 composition scope")]
 public sealed class LocalPressureRuntimeWiringTests
 {
     [Fact]
-    public void Mod_tick_pumps_local_pressure_readiness()
+    public void Fanout_tick_pumps_local_pressure_readiness()
     {
-        var onUpdateBody = BodyOf(ReadModSource(), "public override void OnUpdate()");
+        var fanout = ReadCompositionSource("LifecycleFanout.cs");
 
-        Assert.Contains("_localPressureRuntime?.Service.PumpReadiness();", onUpdateBody, StringComparison.Ordinal);
+        Assert.Contains("ReadinessPump = () => root.LocalPressure?.Service.PumpReadiness(),", fanout, StringComparison.Ordinal);
+        Assert.Contains("slots.ReadinessPump?.Invoke();", BodyOf(fanout, "public void Update()"), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Mod_initialization_uses_the_native_law_response_composition_helper_before_custody_bridge_wiring()
+    public void Law_module_builds_the_native_composition_before_the_custody_bridge_and_patch()
     {
-        var initializeBody = BodyOf(ReadModSource(), "public override void OnInitializeMelon()");
+        var law = ReadCompositionSource("LawModule.cs");
+        var melon = ReadCompositionSource("MelonEngineAdapters.cs");
 
-        Assert.Equal(1, Count(initializeBody, "_nativeLawResponseComposition = new NativeLawResponseModComposition("));
-        Assert.Equal(1, Count(initializeBody, "_nativeLawResponseController = _nativeLawResponseComposition.Controller;"));
-        Assert.Equal(1, Count(initializeBody, "_localPressureRuntime = _nativeLawResponseComposition.LocalPressureRuntime;"));
-        Assert.Equal(1, Count(initializeBody, "_policeCustodyEvidenceBridge = new PoliceCustodyEvidenceBridge("));
-
+        Assert.Equal(1, Count(law, "new NativeLawResponseModComposition("));
+        Assert.Equal(1, Count(law, "new PoliceCustodyEvidenceBridge("));
+        Assert.Equal(1, Count(melon, "PoliceCustodyPatch.Apply("));
         AssertOrdered(
-            initializeBody,
-            "_nativeLawResponseComposition = new NativeLawResponseModComposition(",
-            "_nativeLawResponseController = _nativeLawResponseComposition.Controller;",
-            "_localPressureRuntime = _nativeLawResponseComposition.LocalPressureRuntime;",
-            "_policeCustodyEvidenceBridge = new PoliceCustodyEvidenceBridge(",
-            "PoliceCustodyPatch.Apply(");
+            law,
+            "new NativeLawResponseModComposition(",
+            "root.Law = composition;",
+            "root.LawController = composition.Controller;",
+            "root.LocalPressure = composition.LocalPressureRuntime;",
+            "return composition;",
+            "new PoliceCustodyEvidenceBridge(",
+            "engine.ApplyCustody(bridge, serviceWarn);");
+
+        using var scope = new CompositionScope();
+        var trace = scope.Engine.Trace;
+        Assert.True(trace.IndexOf("step:Law.Composition") < trace.IndexOf("step:Law.Bridge"));
+        Assert.True(trace.IndexOf("step:Law.Bridge") < trace.IndexOf("apply:Custody"));
     }
 
     [Fact]
-    public void Mod_deinitialization_disposes_native_law_response_composition_after_custody_bridge_and_before_fish_warehouse_teardown()
+    public void Teardown_disposes_the_custody_bridge_and_law_before_the_warehouse_resets()
     {
-        var deinitializeBody = BodyOf(ReadModSource(), "public override void OnDeinitializeMelon()");
+        var teardown = BodyOf(ReadCompositionSource("OcCompositionRoot.cs"), "public void Teardown()");
+        var melon = ReadCompositionSource("MelonEngineAdapters.cs");
 
-        Assert.Equal(1, Count(deinitializeBody, "PoliceCustodyPatch.Reset();"));
-        Assert.Equal(1, Count(deinitializeBody, "_policeCustodyEvidenceBridge?.Dispose();"));
-        Assert.Equal(1, Count(deinitializeBody, "_nativeLawResponseComposition?.Dispose();"));
-
+        Assert.Equal(1, Count(teardown, "engine.ResetCustody();"));
+        Assert.Equal(1, Count(teardown, "CustodyBridge?.Dispose();"));
+        Assert.Equal(1, Count(teardown, "Law?.Dispose();"));
+        Assert.Equal(1, Count(melon, "PoliceCustodyPatch.Reset()"));
         AssertOrdered(
-            deinitializeBody,
-            "PoliceCustodyPatch.Reset();",
-            "_policeCustodyEvidenceBridge?.Dispose();",
-            "_policeCustodyEvidenceBridge = null;",
-            "_nativeLawResponseComposition?.Dispose();",
-            "_nativeLawResponseComposition = null;",
-            "_nativeLawResponseController = null;",
-            "_localPressureRuntime = null;",
-            "FishWarehouseManagementCanvasPatch.SetTargetProperty(null);");
+            teardown,
+            "engine.ResetCustody();",
+            "CustodyBridge?.Dispose();",
+            "CustodyBridge = null;",
+            "Law?.Dispose();",
+            "Law = null;",
+            "LawController = null;",
+            "LocalPressure = null;",
+            "engine.ClearWarehouseManagementTarget();");
+
+        using var scope = new CompositionScope();
+        scope.Root.Teardown();
+
+        Assert.Null(scope.Root.CustodyBridge);
+        Assert.Null(scope.Root.Law);
+        Assert.Null(scope.Root.LawController);
+        Assert.Null(scope.Root.LocalPressure);
+        var trace = scope.Engine.Trace;
+        Assert.True(trace.IndexOf("reset:Custody") < trace.IndexOf("teardown:Custody.Dispose"));
+        Assert.True(trace.IndexOf("teardown:Custody.Dispose") < trace.IndexOf("teardown:Law.Dispose"));
+        Assert.True(trace.IndexOf("teardown:Law.Dispose") < trace.IndexOf("reset:WarehouseManagementTarget"));
     }
 
     [Fact]
-    public void Mod_keeps_oc41_out_of_update_and_adds_no_new_lifecycle_or_patch_hooks()
+    public void Fanout_keeps_oc41_out_of_update_and_wires_current_patch_and_lifecycle_hooks()
     {
-        var modSource = ReadModSource();
-        var onUpdateBody = BodyOf(modSource, "public override void OnUpdate()");
+        var fanout = ReadCompositionSource("LifecycleFanout.cs");
+        var melon = ReadCompositionSource("MelonEngineAdapters.cs");
+        var onUpdateBody = BodyOf(fanout, "public void Update()");
 
         Assert.DoesNotContain("NativeLawResponse", onUpdateBody, StringComparison.Ordinal);
         Assert.DoesNotContain("NativePoliceDispatchAdapter", onUpdateBody, StringComparison.Ordinal);
         Assert.DoesNotContain("_nativeLawResponseController", onUpdateBody, StringComparison.Ordinal);
         Assert.DoesNotContain("_nativeLawResponseComposition", onUpdateBody, StringComparison.Ordinal);
 
-        Assert.Equal(1, Count(modSource, "FishWarehouseManagementCanvasPatch.Apply(HarmonyInstance);"));
-        Assert.Equal(1, Count(modSource, "FishWarehouseNativeGridPlacementPatches.Apply(HarmonyInstance);"));
-        Assert.Equal(1, Count(modSource, "FishWarehouseDockOccupantRefreshPatch.Apply(HarmonyInstance);"));
-        Assert.Equal(1, Count(modSource, "FishWarehousePropertyLoadCapturePatch.Apply("));
-        Assert.Equal(1, Count(modSource, "FishWarehouseNativePropertyWriteGuardPatch.Apply("));
-        Assert.Equal(1, Count(modSource, "PoliceCustodyPatch.Apply("));
+        Assert.Equal(1, Count(melon, "FishWarehouseManagementCanvasPatch.Apply(_harmony);"));
+        Assert.Equal(1, Count(melon, "FishWarehouseNativeGridPlacementPatches.Apply(_harmony);"));
+        Assert.Equal(1, Count(melon, "FishWarehouseDockOccupantRefreshPatch.Apply(_harmony);"));
+        Assert.Equal(1, Count(melon, "FishWarehousePropertyLoadCapturePatch.Apply("));
+        Assert.Equal(1, Count(melon, "FishWarehouseNativePropertyWriteGuardPatch.Apply("));
+        Assert.Equal(1, Count(melon, "PoliceCustodyPatch.Apply("));
 
-        Assert.Equal(1, Count(modSource, "GameLifecycle.OnSaveComplete += HandleSaveComplete;"));
-        Assert.Equal(1, Count(modSource, "GameLifecycle.OnPreLoad += HandlePreLoad;"));
-        Assert.Equal(1, Count(modSource, "GameLifecycle.OnLoadComplete += HandleLoadComplete;"));
-        Assert.Equal(1, Count(modSource, "GameLifecycle.OnSaveComplete -= HandleSaveComplete;"));
-        Assert.Equal(1, Count(modSource, "GameLifecycle.OnPreLoad -= HandlePreLoad;"));
-        Assert.Equal(1, Count(modSource, "GameLifecycle.OnLoadComplete -= HandleLoadComplete;"));
+        using var scope = new CompositionScope();
+
+        CompositionAssertions.AssertPatchCalls(scope.Engine);
+        CompositionAssertions.AssertSubscribeCalls(scope.Engine);
+        scope.Root.Teardown();
+        CompositionAssertions.AssertUnsubscribeCalls(scope.Engine);
     }
 
     [Fact]
-    public void Mod_defers_hq_load_epoch_until_recovery_and_keeps_other_lifecycle_notifications()
+    public void Fanout_defers_hq_load_epoch_until_recovery_and_keeps_other_lifecycle_notifications()
     {
-        var modSource = ReadModSource();
-        var preLoadBody = BodyOf(modSource, "private void HandlePreLoad()");
-        var loadCompleteBody = BodyOf(modSource, "private void HandleLoadComplete()");
+        var fanout = ReadCompositionSource("LifecycleFanout.cs");
 
-        Assert.Contains("_syndicateHqComposition?.OnPreLoad();", preLoadBody, StringComparison.Ordinal);
-        Assert.DoesNotContain("_syndicateHqHostContext?.BeginLoad();", preLoadBody, StringComparison.Ordinal);
-        Assert.Contains("_release1StoryRuntime?.OnPreLoad()", preLoadBody, StringComparison.Ordinal);
-        Assert.Contains("_fishWarehousePersistenceReplayService?.PrepareForLoad();", preLoadBody, StringComparison.Ordinal);
-        AssertOrdered(preLoadBody, "_syndicateHqComposition?.OnPreLoad();", "_release1StoryRuntime?.OnPreLoad()");
+        Assert.Contains("new LifecycleStep(\"pre-load/hq\", () => root.Hq?.OnPreLoad()),", fanout, StringComparison.Ordinal);
+        Assert.DoesNotContain("BeginLoad", fanout, StringComparison.Ordinal);
+        Assert.Contains("root.Story?.OnPreLoad()", fanout, StringComparison.Ordinal);
+        Assert.Contains("root.WarehouseReplay?.PrepareForLoad()", fanout, StringComparison.Ordinal);
+        AssertOrdered(fanout, "\"pre-load/hq\"", "\"pre-load/story\"");
 
         // OC-63 wraps each load-complete child in the timing seam, so the assignment now lands
         // inside a measured lambda rather than reading straight into a var declaration. The wiring
@@ -97,28 +118,37 @@ public sealed class LocalPressureRuntimeWiringTests
         // the later OnLoadComplete. OC-10 wraps the story call in
         // Release1StoryLifecycleLogging.LogIfRejected so a rejected lifecycle result gets logged,
         // so the call site is now a substring without its own trailing semicolon.
-        Assert.Contains("hqLoadPrepared = _syndicateHqComposition?.PrepareLoadComplete() ?? true;", loadCompleteBody, StringComparison.Ordinal);
-        AssertOrdered(loadCompleteBody, "PrepareLoadComplete()", "_release1StoryRuntime?.OnLoadComplete()", "_syndicateHqComposition?.OnLoadComplete();");
+        Assert.Contains("LoadCompletePrepare = new LifecycleGateStep(\"load-complete/hq-prepare\", () => root.Hq?.PrepareLoadComplete() ?? true),", fanout, StringComparison.Ordinal);
+        Assert.Contains("hqLoadPrepared = prepare.Run();", fanout, StringComparison.Ordinal);
+        AssertOrdered(fanout, "PrepareLoadComplete()", "\"load-complete/story\"", "\"load-complete/hq\"");
+
+        using var scope = new CompositionScope();
+        var tables = LifecycleTables.ForRoot(scope.Root);
+
+        CompositionAssertions.AssertPreLoadTable(tables);
+        CompositionAssertions.AssertLoadCompleteTable(tables);
     }
 
     [Fact]
-    public void Mod_finishes_teardown_when_hq_listener_cleanup_cannot_succeed_at_quit()
+    public void Teardown_finishes_when_hq_listener_cleanup_cannot_succeed_at_quit()
     {
-        var deinitializeBody = BodyOf(ReadModSource(), "public override void OnDeinitializeMelon()");
+        var teardown = BodyOf(ReadCompositionSource("OcCompositionRoot.cs"), "public void Teardown()");
+        var melon = ReadCompositionSource("MelonEngineAdapters.cs");
 
-        Assert.Contains("if (_syndicateHqComposition is not null && !_syndicateHqComposition.TryDispose())", deinitializeBody, StringComparison.Ordinal);
+        Assert.Contains("if (Hq is not null && !Hq.TryDispose())", teardown, StringComparison.Ordinal);
         Assert.Contains(
-            "MelonLogger.Warning(\"[Organized Crime] Syndicate HQ deinitialization remains pending until exact listener cleanup succeeds.\");",
-            deinitializeBody,
+            "Warn(\"[Organized Crime] Syndicate HQ deinitialization remains pending until exact listener cleanup succeeds.\");",
+            teardown,
             StringComparison.Ordinal);
+        Assert.Equal(1, Count(melon, "SyndicateHqStorageLoadPatch.Reset()"));
         AssertOrdered(
-            deinitializeBody,
-            "_syndicateHqStorageRuntime?.MarkTeardown();",
-            "_syndicateHqComposition.TryDispose()",
-            "MelonLogger.Warning(\"[Organized Crime] Syndicate HQ deinitialization remains pending until exact listener cleanup succeeds.\");",
-            "SyndicateHqStorageLoadPatch.Reset();",
-            "_syndicateHqStorageRuntime?.Dispose();",
-            "_release1StoryRuntime?.Dispose();");
+            teardown,
+            "HqStorage?.MarkTeardown();",
+            "Hq.TryDispose()",
+            "Warn(\"[Organized Crime] Syndicate HQ deinitialization remains pending until exact listener cleanup succeeds.\");",
+            "engine.ResetHqStorageLoad();",
+            "HqStorage?.Dispose();",
+            "Story?.Dispose();");
     }
 
     [Fact]
@@ -133,66 +163,105 @@ public sealed class LocalPressureRuntimeWiringTests
     }
 
     [Fact]
-    public void Mod_preserves_exact_fish_warehouse_statement_count_and_order()
+    public void Composition_preserves_exact_fish_warehouse_setup_and_teardown_order()
     {
-        var modSource = ReadModSource();
-        var initializeFishWarehouseStatements = MatchingLines(
-            BodyOf(modSource, "public override void OnInitializeMelon()"),
-            line => line.Contains("FishWarehouse", StringComparison.Ordinal) ||
-                line.Contains("_fishWarehouse", StringComparison.Ordinal));
-        var deinitializeFishWarehouseStatements = MatchingLines(
-            BodyOf(modSource, "public override void OnDeinitializeMelon()"),
-            line => line.Contains("FishWarehouse", StringComparison.Ordinal) ||
-                line.Contains("_fishWarehouse", StringComparison.Ordinal));
+        var warehouse = ReadCompositionSource("WarehouseModule.cs");
+        var chapter3 = ReadCompositionSource("Chapter3Module.cs");
+        var teardown = BodyOf(ReadCompositionSource("OcCompositionRoot.cs"), "public void Teardown()");
+        var melon = ReadCompositionSource("MelonEngineAdapters.cs");
 
+        Assert.Contains("new Chapter3WarehouseOwnership(() => root.WarehouseRuntime?.OwnershipUnlocked ?? false)", chapter3, StringComparison.Ordinal);
+        AssertOrdered(
+            warehouse,
+            "engine.ApplyWarehouseCanvas();",
+            "engine.ApplyWarehouseGrid();",
+            "engine.ApplyWarehouseDock();",
+            "engine.CreatePropertyHost()",
+            "engine.ApplyWarehouseDeliveryRestore(",
+            "new FishWarehouseRuntimeService(",
+            "new Chapter3WarehouseAcquisition(",
+            "new FishWarehousePropertySnapshotStore();",
+            "new FishWarehouseReplayLifecycle(",
+            "new FishWarehousePersistenceService(",
+            "new FishWarehousePropertyCaptureService(",
+            "StaffReturnBannerSender = new FishWarehouseStaffReturnBannerSender(",
+            "EmployeeCapacitySource = new FishWarehouseEmployeeCapacitySource(",
+            "WarehouseCapacity = new Chapter3WarehouseCapacityApplier(",
+            "new FishWarehousePersistenceReplayOperations(",
+            "new FishWarehousePersistenceReplayService(",
+            "engine.ApplyWarehouseLoadCapture(",
+            "engine.ApplyWarehouseWriteGuard(");
+        AssertOrdered(
+            teardown,
+            "engine.ClearWarehouseManagementTarget();",
+            "engine.ResetWarehouseDeliveryRestore();",
+            "engine.ResetWarehouseLoadCapture();",
+            "engine.ResetWarehouseWriteGuard();",
+            "WarehouseReplay = null;",
+            "WarehousePersistence = null;",
+            "WarehouseCapture?.Reset();",
+            "WarehouseCapture = null;",
+            "WarehouseRuntime = null;");
+        Assert.Equal(1, Count(melon, "FishWarehouseDeliveryRestorePatch.Apply("));
+        Assert.Equal(1, Count(melon, "FishWarehouseDeliveryRestorePatch.Reset()"));
+        Assert.Equal(1, Count(melon, "FishWarehouseManagementCanvasPatch.SetTargetProperty(null);"));
+        Assert.Equal(1, Count(melon, "FishWarehousePropertyLoadCapturePatch.Reset();"));
+        Assert.Equal(1, Count(melon, "FishWarehouseNativePropertyWriteGuardPatch.Reset();"));
+
+        using var scope = new CompositionScope();
         Assert.Equal(
             new[]
             {
-                "FishWarehouseManagementCanvasPatch.Apply(HarmonyInstance);",
-                "FishWarehouseNativeGridPlacementPatches.Apply(HarmonyInstance);",
-                "FishWarehouseDockOccupantRefreshPatch.Apply(HarmonyInstance);",
-                "FishWarehouseDeliveryRestorePatch.Apply(",
-                "_fishWarehouseRuntimeService = new FishWarehouseRuntimeService(",
-                "RuntimePropertyReadiness.IsFishWarehouseReady,",
-                "var snapshotStore = new FishWarehousePropertySnapshotStore();",
-                "FishWarehousePropertyCaptureService? captureService = null;",
-                "var replayLifecycle = new FishWarehouseReplayLifecycle(",
-                "new FishWarehouseCaptureRecoveryPrerequisites(",
-                "_fishWarehousePersistenceService = new FishWarehousePersistenceService(",
-                "new FishWarehouseSaveStore(),",
-                "() => _fishWarehouseRuntimeService?.CaptureSaveState() ?? FishWarehouseSaveState.UnownedState(),",
-                "captureService = new FishWarehousePropertyCaptureService(",
-                "new FishWarehouseNativePropertySnapshotInspector(),",
-                "_fishWarehousePersistenceService,",
-                "_fishWarehousePropertyCaptureService = captureService;",
-                "var runtimeService = _fishWarehouseRuntimeService;",
-                "var persistenceService = _fishWarehousePersistenceService;",
-                "var replayOperations = new FishWarehousePersistenceReplayOperations(",
-                "_fishWarehousePersistenceReplayService = new FishWarehousePersistenceReplayService(",
-                "FishWarehouseDeliveryRestorePatch.Reset,",
-                "FishWarehousePropertyLoadCapturePatch.Apply(",
-                "FishWarehouseNativePropertyWriteGuardPatch.Apply("
+                "apply:WarehouseCanvas",
+                "apply:WarehouseGrid",
+                "apply:WarehouseDock",
+                "factory:PropertyHost",
+                "apply:WarehouseDeliveryRestore",
+                "step:Warehouse.RuntimeService",
+                "step:Warehouse.Acquisition",
+                "step:Warehouse.SnapshotStore",
+                "step:Warehouse.ReplayLifecycle",
+                "step:Warehouse.PersistenceService",
+                "step:Warehouse.CaptureService",
+                "step:Warehouse.BannerSender",
+                "step:Warehouse.CapacitySource",
+                "step:Warehouse.Capacity",
+                "step:Warehouse.ReplayOperations",
+                "step:Warehouse.ReplayService",
+                "apply:WarehouseLoadCapture",
+                "apply:WarehouseWriteGuard",
             },
-            initializeFishWarehouseStatements);
+            scope.Engine.Trace
+                .Where(entry => entry.StartsWith("apply:Warehouse", StringComparison.Ordinal) ||
+                    entry.StartsWith("step:Warehouse", StringComparison.Ordinal) ||
+                    entry == "factory:PropertyHost")
+                .ToList());
+        Assert.NotNull(scope.Root.Chapter3!.WarehouseAcquisition);
+        Assert.NotNull(scope.Root.Chapter3.StaffReturnBannerSender);
 
+        scope.Root.Teardown();
         Assert.Equal(
             new[]
             {
-                "FishWarehouseManagementCanvasPatch.SetTargetProperty(null);",
-                "FishWarehouseDeliveryRestorePatch.Reset();",
-                "FishWarehousePropertyLoadCapturePatch.Reset();",
-                "FishWarehouseNativePropertyWriteGuardPatch.Reset();",
-                "_fishWarehousePersistenceReplayService = null;",
-                "_fishWarehousePersistenceService = null;",
-                "_fishWarehousePropertyCaptureService?.Reset();",
-                "_fishWarehousePropertyCaptureService = null;",
-                "_fishWarehouseRuntimeService = null;"
+                "reset:WarehouseManagementTarget",
+                "reset:WarehouseDeliveryRestore",
+                "reset:WarehouseLoadCapture",
+                "reset:WarehouseWriteGuard",
+                "teardown:Capture.Reset",
             },
-            deinitializeFishWarehouseStatements);
+            scope.Engine.Trace
+                .Where(entry => entry.StartsWith("reset:Warehouse", StringComparison.Ordinal) ||
+                    entry == "teardown:Capture.Reset")
+                .ToList());
+        Assert.Null(scope.Root.WarehouseReplay);
+        Assert.Null(scope.Root.WarehousePersistence);
+        Assert.Null(scope.Root.WarehouseCapture);
+        Assert.Null(scope.Root.WarehouseRuntime);
     }
 
-    private static string ReadModSource() =>
-        File.ReadAllText(Path.Combine(FindRepositoryRoot(), "tools", "OrganizedCrime", "Mod.cs"));
+
+    private static string ReadCompositionSource(string fileName) =>
+        File.ReadAllText(Path.Combine(FindRepositoryRoot(), "tools", "OrganizedCrime", "Runtime", "Composition", fileName));
 
     private static int Count(string source, string value) =>
         source.Split(value, StringSplitOptions.None).Length - 1;
@@ -232,11 +301,6 @@ public sealed class LocalPressureRuntimeWiringTests
         }
     }
 
-    private static string[] MatchingLines(string source, Func<string, bool> predicate) =>
-        source.Split('\n')
-            .Select(line => line.Trim())
-            .Where(line => line.Length > 0 && predicate(line))
-            .ToArray();
 
     private static string FindRepositoryRoot()
     {

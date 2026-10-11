@@ -255,6 +255,43 @@ public sealed class FishWarehousePropertyCapturePolicyTests
         }
     }
 
+    [Fact]
+    public void Recorded_capture_failure_logs_the_exception_detail_once()
+    {
+        var saveFolder = CreateTemporaryFolder();
+        var store = new CaptureSaveStore();
+        var lifecycle = new FishWarehouseReplayLifecycle(_ => SuccessfulAttempt.ToRecoveryPrerequisites());
+        var persistence = new FishWarehousePersistenceService(
+            store,
+            () => saveFolder,
+            FishWarehouseSaveState.OwnedState,
+            _ => { },
+            replayLifecycle: lifecycle);
+        var logs = new List<string>();
+        var service = new FishWarehousePropertyCaptureService(
+            new FishWarehousePropertySnapshotStore(),
+            new FishWarehouseNativePropertySnapshotInspector(),
+            persistence,
+            lifecycle,
+            logs.Add);
+
+        try
+        {
+            var detail = new InvalidOperationException("PropertyCode access fault").ToString();
+            var result = service.RecordCaptureFailure(saveFolder, "generation-1", "initial capture failed", detail);
+
+            Assert.Equal(FishWarehousePropertyCaptureState.RecoveryRequired, result.State);
+            Assert.Equal(detail, result.FailureDetail);
+            Assert.Contains(logs, line => line.Contains("capture failed", StringComparison.Ordinal));
+            Assert.Single(logs, line => line.Contains("InvalidOperationException", StringComparison.Ordinal));
+            Assert.DoesNotContain(lifecycle.CurrentCheckpoint!.FailureReason!, "InvalidOperationException", StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(saveFolder, recursive: true);
+        }
+    }
+
     private static FishWarehousePropertyCaptureAttempt SuccessfulAttempt { get; } =
         new(
             ByteProtectionSucceeded: true,

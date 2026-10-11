@@ -12,10 +12,21 @@ namespace OrganizedCrime.Runtime;
 /// </summary>
 public static class Release1ChiefPresentation
 {
-    public static Release1PresentationPlan BuildPlan(Release1StoryState? state)
+    // OC-118. today is the whole game day the protection button's cap and Buy-vs-Extend label
+    // read; null (an unreadable clock, or a caller that predates protection) shows the button
+    // whenever the record otherwise earns it, and the service still refuses over-cap taps safely.
+    // playerDay maps an absolute cover end day to the day number the player reads (Chapter 3's
+    // chapter days, the frame of Nell's "by day N" and the protection quest line); null or an
+    // unmapped day falls back to the absolute day.
+    public static Release1PresentationPlan BuildPlan(Release1StoryState? state, int? today = null, Func<int, int?>? playerDay = null)
     {
         var record = state?.ChiefRecord;
         if (record is null) return Release1PresentationPlan.Empty;
+        int Shown(int absoluteDay)
+        {
+            try { return playerDay?.Invoke(absoluteDay) ?? absoluteDay; }
+            catch { return absoluteDay; }
+        }
 
         var playerId = state!.PlayerId;
         var messages = new List<Release1DesiredMessage>();
@@ -60,19 +71,77 @@ public static class Release1ChiefPresentation
             messages.Add(CounterMessage(playerId, LiftCooledReceipt(record.CooledLifts), Release1ChiefCampbellCopy.LiftCooledText));
         if (record.PaymentBlockedNotices >= 1)
             messages.Add(CounterMessage(playerId, PaymentBlockedReceipt(record.PaymentBlockedNotices), Release1ChiefCampbellCopy.PaymentBlockedText));
+        // OC-74. The day-old-lockdown warning, on the never-resetting counter like the lines
+        // above; the projector dedupes the older counts by their receipts.
+        if (record.ForcedWantedWarnings >= 1)
+            messages.Add(CounterMessage(playerId, ForcedWantedWarningReceipt(record.ForcedWantedWarnings), Release1ChiefCampbellCopy.ForcedWantedWarningText));
+        // OC-118. The shortfall names the demand when one stands unpaid and the protection price
+        // otherwise: a demand shortfall can only be set (and survives only) on an unpaid record,
+        // since both prepares clear it, so a shortfall on Adopted or Settled is always a buy tap's.
         if (record.LastShortfallNoticed is { } shortfall)
-            messages.Add(Message(playerId, record, ShortfallReceipt(shortfall), Release1ChiefCampbellCopy.ShortCashText(record.Demand)));
+            messages.Add(Message(playerId, record, ShortfallReceipt(shortfall), Release1ChiefCampbellCopy.ShortCashText(
+                Release1ChiefLedger.IsUnpaid(record) ? record.Demand : Release1ChiefProtection.ProtectionWeeklyPrice)));
+        if (record.LateFeesCharged >= 1 && record.LastLateFeeChargedDay is { } chargedDay)
+            messages.Add(CounterMessage(playerId, LateFeeReceipt(chargedDay), Release1ChiefCampbellCopy.LateFeeText(record.Demand)));
 
-        Release1DesiredDecision? decision = record.State == Release1ChiefState.DemandOpen
-            ? new Release1DesiredDecision(
+        // OC-118. The protection cluster. Every key never resets or strictly increases (the offer
+        // fires once ever; cover end days only move forward; the counters only climb), so all six
+        // join the counter-keyed lines above: their correlations can never move under them.
+        if (record.ProtectionOffered)
+            messages.Add(CounterMessage(playerId, ProtectionOfferReceipt(), Release1ChiefCampbellCopy.ProtectionOfferText()));
+        if (record.ProtectedUntilDay is { } untilDay)
+            messages.Add(CounterMessage(playerId, ProtectionCoveredReceipt(untilDay), Release1ChiefCampbellCopy.ProtectionCoveredText(Shown(untilDay))));
+        if (record.ProtectionWarnedForUntilDay is { } warnedDay && warnedDay == record.ProtectedUntilDay)
+            messages.Add(CounterMessage(playerId, ProtectionWarningReceipt(warnedDay), Release1ChiefCampbellCopy.ProtectionWarningText()));
+        if (record.ProtectionLapseNotices >= 1)
+            messages.Add(CounterMessage(playerId, ProtectionLapseReceipt(record.ProtectionLapseNotices), Release1ChiefCampbellCopy.ProtectionLapseText()));
+        if (record.ProtectionSettleFirstRefusals >= 1)
+            messages.Add(CounterMessage(playerId, ProtectionRefusedReceipt(record.ProtectionSettleFirstRefusals), Release1ChiefCampbellCopy.ProtectionSettleFirstText()));
+        if (record.ProtectionBlockedNotices >= 1)
+            messages.Add(CounterMessage(playerId, ProtectionBlockedReceipt(record.ProtectionBlockedNotices), Release1ChiefCampbellCopy.ProtectionBlockedText));
+
+        // OC-75: the demand stays payable after "Not today". DemandOpen offers Pay and
+        // Decline; Declined keeps the Pay button standing on its own prompt and drops
+        // Decline, which only ever appears on the first prompt. Both share the demand's
+        // decision id; the option labels are what change, and the projector rebinds.
+        Release1DesiredDecision? decision = record.State switch
+        {
+            Release1ChiefState.DemandOpen => new Release1DesiredDecision(
                 DemandDecisionId(record.DemandRound),
                 Copy(Release1ChiefCampbellCopy.DemandText(record.DemandRound)),
                 new[]
                 {
                     new Release1DecisionOption(Copy(Release1ChiefCampbellCopy.PayLabel(record.Demand)), Release1PresentationCommand.ChiefCampbellPay),
                     new Release1DecisionOption(Copy(Release1ChiefCampbellCopy.DeclineLabel), Release1PresentationCommand.ChiefCampbellDecline)
-                })
-            : null;
+                }),
+            Release1ChiefState.Declined => new Release1DesiredDecision(
+                DemandDecisionId(record.DemandRound),
+                Copy(Release1ChiefCampbellCopy.StandingText(record.Demand)),
+                new[]
+                {
+                    new Release1DecisionOption(Copy(Release1ChiefCampbellCopy.PayLabel(record.Demand)), Release1PresentationCommand.ChiefCampbellPay)
+                }),
+            // OC-118. The standing protection button: offered and unpaid records only (a demand
+            // withholds it; Paying and PayingProtection are mid-flight), hidden at the banking cap,
+            // Buy before cover and Extend during it. One stable decision id; the prompt and the
+            // label are what change, and the projector rebinds, the demand's own convention.
+            Release1ChiefState.Adopted or Release1ChiefState.Settled when record.ProtectionOffered &&
+                (today is null || Release1ChiefLedger.ProtectionRoom(record, today.Value) >= Release1ChiefProtection.CoverDaysPerPurchase) =>
+                new Release1DesiredDecision(
+                    ProtectionDecisionId,
+                    Copy(today is { } day && Release1ChiefLedger.IsProtected(record, day) && record.ProtectedUntilDay is { } coveredUntil
+                        ? Release1ChiefCampbellCopy.ProtectionCoveredText(Shown(coveredUntil))
+                        : Release1ChiefCampbellCopy.ProtectionOfferText()),
+                    new[]
+                    {
+                        new Release1DecisionOption(
+                            Copy(today is { } optionDay && Release1ChiefLedger.IsProtected(record, optionDay)
+                                ? Release1ChiefCampbellCopy.ExtendProtectionLabel()
+                                : Release1ChiefCampbellCopy.BuyProtectionLabel()),
+                            Release1PresentationCommand.ChiefCampbellBuyProtection)
+                    }),
+            _ => null
+        };
 
         return new Release1PresentationPlan(messages, decision, Array.Empty<Release1DesiredQuest>());
     }
@@ -95,11 +164,12 @@ public static class Release1ChiefPresentation
         new(Correlation(playerId, record.DemandRound, receiptId), Copy(text));
 
     /// <summary>
-    /// For the six receipts (Decline, Watch, Lockdown, LiftPaid, LiftCooled, PaymentBlocked) whose own
-    /// counter never resets and so already carries the line's full identity: the round component of
-    /// the correlation is fixed rather than read from the record, so a round change can never mint a
-    /// fresh correlation for an already-delivered line. See the OC-73 review fix comment on the call
-    /// sites above.
+    /// For the receipts (Decline, Watch, Lockdown, LiftPaid, LiftCooled, PaymentBlocked, LateFee,
+    /// and OC-118's six protection lines, plus the forced-Wanted warning) whose own key never resets and so already carries the
+    /// line's full identity: the round component of the correlation is fixed rather than read from
+    /// the record, so a round change can never mint a fresh correlation for an already-delivered
+    /// line. The fee's own key is the charged day, which only ever increases within a save, and so
+    /// are the protection cover end days. See the OC-73 review fix comment on the call sites above.
     /// </summary>
     private static Release1DesiredMessage CounterMessage(string playerId, string receiptId, string text) =>
         new(CounterCorrelation(playerId, receiptId), Copy(text));
@@ -110,6 +180,7 @@ public static class Release1ChiefPresentation
         Release1LogicalCorrelation.Create(playerId, Release1MissionCatalog.ChiefCampbell, Math.Max(round, 1), Release1TransitionKind.MissionOffered, receiptId).Value;
 
     private static string DemandDecisionId(int round) => $"chief-campbell-demand-r{round}";
+    private const string ProtectionDecisionId = "chief-campbell-protection";
     // OC-73 review fix (finding 1). DeclineReceipt used to be keyed on round alone
     // (chief-decline-r{round}), which reads as stable only within a single payoff cycle: the comment
     // this replaced argued a second collision was "impossible below the cap, since an arrest there
@@ -127,7 +198,15 @@ public static class Release1ChiefPresentation
     private static string LiftPaidReceipt(int count) => $"chief-lift-paid-{count}";
     private static string LiftCooledReceipt(int count) => $"chief-lift-cooled-{count}";
     private static string PaymentBlockedReceipt(int count) => $"chief-payment-blocked-{count}";
+    private static string ForcedWantedWarningReceipt(int count) => $"chief-forced-wanted-warning-{count}";
     private static string ShortfallReceipt(double shortfall) => $"chief-short-{((long)Math.Round(shortfall)).ToString(CultureInfo.InvariantCulture)}";
+    private static string LateFeeReceipt(int day) => $"chief-latefee-{day}";
+    private static string ProtectionOfferReceipt() => "chief-protection-offer";
+    private static string ProtectionCoveredReceipt(int untilDay) => $"chief-protection-covered-{untilDay}";
+    private static string ProtectionWarningReceipt(int untilDay) => $"chief-protection-warning-{untilDay}";
+    private static string ProtectionLapseReceipt(int count) => $"chief-protection-lapsed-{count}";
+    private static string ProtectionRefusedReceipt(int count) => $"chief-protection-refused-{count}";
+    private static string ProtectionBlockedReceipt(int count) => $"chief-protection-blocked-{count}";
 
     private static string Copy(string value) => Release1PlayerCopy.Normalize(value);
 }

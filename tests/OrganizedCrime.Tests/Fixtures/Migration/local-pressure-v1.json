@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "players": [
+    {
+      "playerId": "76561190000000001",
+      "localHeat": 25,
+      "knownOffender": true,
+      "lastEvidenceGameTime": 1077.4166666666667,
+      "quietGraceUntil": 1079.4166666666667,
+      "lastDecayEvaluation": 1100,
+      "region": null,
+      "property": null,
+      "revision": 20
+    }
+  ]
+}

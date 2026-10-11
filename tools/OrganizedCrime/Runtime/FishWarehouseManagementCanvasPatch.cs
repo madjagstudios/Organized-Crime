@@ -57,7 +57,7 @@ internal static class FishWarehouseManagementCanvasPatch
                 return;
 
             _failureReported = true;
-            MelonLogger.Warning($"[Organized Crime] Fish Warehouse management canvas alignment failed safely: {ex}");
+            OrganizedCrimeLog.Warning($"Fish Warehouse management canvas alignment failed safely: {ex}");
         }
     }
 }

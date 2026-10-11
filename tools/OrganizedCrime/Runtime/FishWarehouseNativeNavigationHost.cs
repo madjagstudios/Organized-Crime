@@ -1,5 +1,6 @@
 using Il2CppScheduleOne.ObjectScripts;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 using UnityEngine;
 
 namespace OrganizedCrime.Runtime;
@@ -45,7 +46,7 @@ public sealed class FishWarehouseNativeNavigationHost
         int? preferredEmployeeAgentTypeId = null,
         Action<string>? log = null)
     {
-        if (!IsAlive(anchor) || !IsAlive(propertyRoot) || projection is null || idlePoints is null ||
+        if (!UnityLife.IsAlive(anchor) || !UnityLife.IsAlive(propertyRoot) || projection is null || idlePoints is null ||
             !FishWarehouseTransformSignatureDefinition.IsCoincident(
                 ToTransformSignature(anchor),
                 ToTransformSignature(propertyRoot)))
@@ -54,7 +55,7 @@ public sealed class FishWarehouseNativeNavigationHost
         }
 
         Transform[] idle = idlePoints.ToArray();
-        int expectedCount = FishWarehouseEmployeeInfrastructureDefinition.Capacity;
+        int expectedCount = FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount;
         if (idle.Length != expectedCount)
         {
             string reason = idle.Length < expectedCount
@@ -65,7 +66,7 @@ public sealed class FishWarehouseNativeNavigationHost
                 log);
         }
 
-        if (idle.Any(point => !IsAlive(point)))
+        if (idle.Any(point => !UnityLife.IsAlive(point)))
         {
             return FailClosed(
                 $"Fish Warehouse native navigation build rejected malformed-idle-points: expected={expectedCount} valid live points.",
@@ -78,8 +79,8 @@ public sealed class FishWarehouseNativeNavigationHost
             var request = new FishWarehouseNativeNavigationBuildRequest(
                 ToWorldDescriptor(plan, propertyRoot),
                 idle.Select(point => ToModelVector(point.position)).ToArray(),
-                IsAlive(restoredLocker) ? ToModelVector(restoredLocker!.position) : null,
-                IsAlive(representativePackagingStation)
+                UnityLife.IsAlive(restoredLocker) ? ToModelVector(restoredLocker!.position) : null,
+                UnityLife.IsAlive(representativePackagingStation)
                     ? ToModelVector(representativePackagingStation!.transform.position)
                     : null,
                 preferredEmployeeAgentTypeId);
@@ -164,15 +165,4 @@ public sealed class FishWarehouseNativeNavigationHost
 
     private static Vector3 ToUnity(FishWarehouseNativeNavigationVector value) => new(value.X, value.Y, value.Z);
 
-    private static bool IsAlive(UnityEngine.Object? value)
-    {
-        try
-        {
-            return value is not null && value != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }

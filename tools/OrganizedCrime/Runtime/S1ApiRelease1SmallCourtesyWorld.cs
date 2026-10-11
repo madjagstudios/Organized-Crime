@@ -3,6 +3,7 @@ using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.Product;
+using OrganizedCrime.Core.Time;
 using OrganizedCrime.Model;
 using S1API.DeadDrops;
 using S1API.Items;
@@ -110,7 +111,7 @@ public sealed class S1ApiRelease1SmallCourtesyWorld : IRelease1SmallCourtesyWorl
             var status = _access.TryReadClock(out var elapsedDays, out var minuteOfDay);
             if (status != Release1SmallCourtesyWorldReadStatus.Ready) return status;
             if (elapsedDays < 0 || minuteOfDay is < 0 or >= 1_440) return Release1SmallCourtesyWorldReadStatus.Unavailable;
-            totalMinutes = checked((double)elapsedDays * 1_440d + minuteOfDay);
+            totalMinutes = GameClock.TotalMinutes(elapsedDays, minuteOfDay);
             return double.IsFinite(totalMinutes)
                 ? Release1SmallCourtesyWorldReadStatus.Ready
                 : Release1SmallCourtesyWorldReadStatus.Unavailable;
@@ -341,13 +342,16 @@ public sealed class S1ApiRelease1SmallCourtesyWorld : IRelease1SmallCourtesyWorl
     /// <summary>
     /// The largest wallet debit OC will ever ask for is the capped demand, so the boundary accepts a
     /// magnitude of at most that and nothing past it. Deliberately its own bound rather than
-    /// <see cref="MaximumCashDecrement"/> (20000), which 25000 would exceed.
+    /// <see cref="MaximumCashDecrement"/> (20000), which 35000 would exceed, so this derives from the ladder cap.
     /// </summary>
-    public const float MaximumWalletDebit = 25_000f;
+    public const float MaximumWalletDebit = (float)Release1ChiefDemandLadder.Cap;
 
-    public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount)
+    public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount) => TryDebitCashBalance(amount, MaximumWalletDebit);
+
+    public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount, float maximumDebit)
     {
-        if (!float.IsFinite(amount) || amount >= 0f || amount < -MaximumWalletDebit || !HasAuthority())
+        if (!float.IsFinite(amount) || amount >= 0f || !float.IsFinite(maximumDebit) || maximumDebit <= 0f ||
+            amount < -maximumDebit || !HasAuthority())
             return Release1SmallCourtesyWorldMutationStatus.Rejected;
         try
         {

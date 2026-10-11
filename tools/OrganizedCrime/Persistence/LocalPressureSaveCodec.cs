@@ -40,7 +40,7 @@ public sealed record LocalPressureCodecResult(
 
 public static class LocalPressureSaveCodec
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
     public const int MaximumPlayerIdLength = 256;
     public const int MaximumContextLength = 64;
 
@@ -56,11 +56,13 @@ public static class LocalPressureSaveCodec
         "schemaVersion", "players"
     };
 
-    private static readonly HashSet<string> PlayerFields = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> PlayerFieldsV1 = new(StringComparer.Ordinal)
     {
         "playerId", "localHeat", "knownOffender", "lastEvidenceGameTime",
         "quietGraceUntil", "lastDecayEvaluation", "region", "property", "revision"
     };
+
+    private static readonly HashSet<string> PlayerFields = new(PlayerFieldsV1, StringComparer.Ordinal) { "lastAppliedRaidCoolingId" };
 
     public static LocalPressureSaveEnvelope CreateEmpty() => LocalPressureSaveEnvelope.CreateEmpty();
 
@@ -78,7 +80,16 @@ public static class LocalPressureSaveCodec
             var ordered = new LocalPressureSaveEnvelope(
                 CurrentSchemaVersion,
                 envelope!.Players.OrderBy(player => player.PlayerId, StringComparer.Ordinal).ToArray());
-            json = JsonSerializer.Serialize(ordered, Options);
+            json = JsonSerializer.Serialize(new
+            {
+                ordered.SchemaVersion,
+                Players = ordered.Players.Select(p => new
+                {
+                    p.PlayerId, p.LocalHeat, p.KnownOffender, p.LastEvidenceGameTime,
+                    p.QuietGraceUntil, p.LastDecayEvaluation, p.Region, p.Property, p.Revision,
+                    p.LastAppliedRaidCoolingId
+                }).ToArray()
+            }, Options);
             result = LocalPressureCodecResult.Success();
             return true;
         }
@@ -162,7 +173,7 @@ public static class LocalPressureSaveCodec
 
             return parsedSchemaVersion switch
             {
-                CurrentSchemaVersion => TryDeserializeV1(root, out envelope, out result),
+                1 or CurrentSchemaVersion => TryDeserializeVersion(root, parsedSchemaVersion, out envelope, out result),
                 _ => Fail(out result, LocalPressureCodecFailureReason.UnsupportedSchema,
                     $"Local Pressure schemaVersion {parsedSchemaVersion} is not supported.")
             };
@@ -206,8 +217,8 @@ public static class LocalPressureSaveCodec
         }
     }
 
-    private static bool TryDeserializeV1(
-        JsonElement root,
+    private static bool TryDeserializeVersion(
+        JsonElement root, int version,
         out LocalPressureSaveEnvelope? envelope,
         out LocalPressureCodecResult result)
     {
@@ -223,13 +234,18 @@ public static class LocalPressureSaveCodec
         {
             if (player.ValueKind != JsonValueKind.Object)
                 return Fail(out result, LocalPressureCodecFailureReason.InvalidJsonType, "Local Pressure player record was not an object.");
-            if (!TryValidateUniqueProperties(player, PlayerFields, out result))
+            if (!TryValidateUniqueProperties(player, version == 1 ? PlayerFieldsV1 : PlayerFields, out result))
                 return false;
             if (!TryReadPlayer(player, out var record, out result))
                 return false;
             if (!seen.Add(record!.PlayerId))
                 return Fail(out result, LocalPressureCodecFailureReason.DuplicatePlayerId,
                     $"Local Pressure player ID was duplicated: {record.PlayerId}.");
+            if (version >= 2)
+            {
+                if (!TryReadOptionalContext(player, "lastAppliedRaidCoolingId", out var raidId, out result)) return false;
+                record = record with { LastAppliedRaidCoolingId = raidId };
+            }
             records.Add(record);
         }
 
@@ -302,6 +318,8 @@ public static class LocalPressureSaveCodec
                 return Fail(out result, LocalPressureCodecFailureReason.InvalidGameTime, "Local Pressure game time was invalid.");
             if (player.Revision < 0)
                 return Fail(out result, LocalPressureCodecFailureReason.InvalidRevision, "Local Pressure revision cannot be negative.");
+            if (!IsValidContext(player.LastAppliedRaidCoolingId))
+                return Fail(out result, LocalPressureCodecFailureReason.InvalidContext, "Invalid raid cooling id.");
             if (!IsValidContext(player.Region) || !IsValidContext(player.Property))
                 return Fail(out result, LocalPressureCodecFailureReason.InvalidContext, "Local Pressure presentation context was invalid or unbounded.");
         }

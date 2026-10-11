@@ -23,7 +23,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -57,7 +57,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             promptPlatform: new PromptPlatformFake());
@@ -97,7 +97,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -131,7 +131,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             promptPlatform: new PromptPlatformFake());
@@ -172,7 +172,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -206,7 +206,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             promptPlatform: new PromptPlatformFake());
@@ -247,7 +247,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -281,7 +281,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             promptPlatform: new PromptPlatformFake());
@@ -320,7 +320,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -354,7 +354,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             promptPlatform: new PromptPlatformFake());
@@ -393,7 +393,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -426,7 +426,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -475,7 +475,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             log: logs.Add,
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
@@ -507,7 +507,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             bannerNow: () => 0f,
             promptPlatform: new PromptPlatformFake());
 
@@ -528,7 +528,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
             native: null));
@@ -550,7 +550,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             queue,
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             bannerNow: () => 0f,
             mode: Release1PresentationMode.Native,
             native: native);
@@ -590,7 +590,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             queue,
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             bannerNow: () => 0f,
             promptPlatform: promptPlatform);
 
@@ -630,7 +630,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             bannerNow: () => 0f,
             promptPlatform: promptPlatform);
         composition.OnLoadComplete();
@@ -661,7 +661,7 @@ public sealed class Release1ProductionCompositionTests
             story,
             new ReaderFake(context.Snapshot),
             new QueueFake(),
-            new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot),
+            new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot),
             bannerNow: () => 0f,
             promptPlatform: promptPlatform);
         composition.OnLoadComplete();
@@ -773,6 +773,7 @@ public sealed class Release1ProductionCompositionTests
         private readonly List<string> _sent = new();
         public Release1ObservedDecision? ObservedDecision { get; private set; }
         public Action<Release1PresentationCommand>? LastOnChosen { get; private set; }
+        public Dictionary<string, Action> LastLabeledCallbacks { get; } = new();
 
         public Release1NativePresentationStatus TryEnsureContact() => Release1NativePresentationStatus.Succeeded;
 
@@ -799,6 +800,15 @@ public sealed class Release1ProductionCompositionTests
             _sent.Add(decision.Prompt);
             ObservedDecision = new Release1ObservedDecision(decision.Id, decision.Options.Select(option => option.Label).ToArray(), decision.Prompt);
             LastOnChosen = onChosen;
+            return Release1NativePresentationStatus.Succeeded;
+        }
+
+        public Release1NativePresentationStatus TrySetLabeledDecision(Release1LabeledDecision decision)
+        {
+            _sent.Add(decision.Prompt);
+            ObservedDecision = new Release1ObservedDecision(decision.Id, decision.Options.Select(option => option.Label).ToArray(), decision.Prompt);
+            LastLabeledCallbacks.Clear();
+            foreach (var option in decision.Options) LastLabeledCallbacks[option.Label] = option.OnChosen;
             return Release1NativePresentationStatus.Succeeded;
         }
 

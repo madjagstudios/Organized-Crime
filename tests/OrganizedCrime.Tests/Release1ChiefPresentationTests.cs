@@ -82,20 +82,20 @@ public sealed class Release1ChiefPresentationTests
     }
 
     [Fact]
-    public void Declined_carries_the_decline_reply()
+    public void Declined_keeps_a_standing_pay_button_and_drops_not_today()
     {
         var record = Open(1) with { State = Release1ChiefState.Declined, DeclineRepliesSent = 1 };
         var plan = Release1ChiefPresentation.BuildPlan(With(record));
 
         var message = Assert.Single(plan.Messages);
-        // OC-73 review fix (finding 1). Keyed on DeclineRepliesSent, a non-resetting counter (not
-        // DemandRound): DemandRound resets to 1 on the Adopted-or-Settled arrest branch
-        // (Release1ChiefLedger.Observe), which used to collide a later payoff cycle's decline reply
-        // with an earlier cycle's already-delivered one at the same round. See
-        // Release1ChiefPresentation.DeclineReceipt's own comment.
         Assert.Equal(Correlation(1, "chief-decline-1"), message.CorrelationId);
-        Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.DeclineReplyText), message.Text);
-        Assert.Null(plan.Decision);
+
+        Assert.NotNull(plan.Decision);
+        Assert.Equal("chief-campbell-demand-r1", plan.Decision!.Id);
+        Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.StandingText(25000)), plan.Decision.Prompt);
+        var option = Assert.Single(plan.Decision.Options);
+        Assert.Equal(Release1ChiefCampbellCopy.PayLabel(25000), option.Label);
+        Assert.Equal(Release1PresentationCommand.ChiefCampbellPay, option.Command);
     }
 
     [Fact]
@@ -159,6 +159,16 @@ public sealed class Release1ChiefPresentationTests
         Assert.DoesNotContain(plan.Messages, message => message.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.LiftPaidText));
         Assert.DoesNotContain(plan.Messages, message => message.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.LiftCooledText));
         Assert.DoesNotContain(plan.Messages, message => message.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PaymentBlockedText));
+        Assert.DoesNotContain(plan.Messages, message => message.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ForcedWantedWarningText));
+    }
+
+    [Fact]
+    public void Forced_wanted_warning_is_carried_on_its_counter_with_its_own_correlation()
+    {
+        var record = Open(1) with { ForcedWantedWarnings = 2 };
+        var plan = Release1ChiefPresentation.BuildPlan(With(record));
+
+        Assert.Contains(plan.Messages, m => m.CorrelationId == Correlation(1, "chief-forced-wanted-warning-2") && m.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ForcedWantedWarningText));
     }
 
     [Fact]
@@ -281,5 +291,58 @@ public sealed class Release1ChiefPresentationTests
         Assert.Equal(
             Release1ChiefPresentation.LockdownAnnouncementCorrelation(PlayerId, atFirstRound),
             Release1ChiefPresentation.LockdownAnnouncementCorrelation(PlayerId, atLaterRound));
+    }
+
+    [Fact]
+    public void Standing_pay_relabels_with_the_current_price()
+    {
+        var record = Open(2) with { State = Release1ChiefState.Declined, LastLateFeeChargedDay = 6, LateFeesCharged = 1 };
+        var plan = Release1ChiefPresentation.BuildPlan(With(record));
+
+        Assert.NotNull(plan.Decision);
+        Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.StandingText(30000)), plan.Decision!.Prompt);
+        Assert.Equal(Release1ChiefCampbellCopy.PayLabel(30000), Assert.Single(plan.Decision.Options).Label);
+    }
+
+    [Fact]
+    public void Fee_text_goes_once_per_charged_day()
+    {
+        var record = Open(2) with { LastLateFeeChargedDay = 6, LateFeesCharged = 1 };
+
+        var plan = Release1ChiefPresentation.BuildPlan(With(record));
+
+        var message = Assert.Single(plan.Messages);
+        Assert.Equal(Correlation(1, "chief-latefee-6"), message.CorrelationId);
+        Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.LateFeeText(30000)), message.Text);
+    }
+
+    [Fact]
+    public void Fee_text_correlation_survives_later_rounds()
+    {
+        var round2 = Open(2) with { LastLateFeeChargedDay = 6, LateFeesCharged = 1 };
+        var round3 = Open(3) with { LastLateFeeChargedDay = 6, LateFeesCharged = 1 };
+
+        var first = Assert.Single(Release1ChiefPresentation.BuildPlan(With(round2)).Messages);
+        var second = Assert.Single(Release1ChiefPresentation.BuildPlan(With(round3)).Messages);
+
+        Assert.Equal(first.CorrelationId, second.CorrelationId);
+    }
+
+    [Fact]
+    public void No_fee_text_before_the_first_charge()
+    {
+        var plan = Release1ChiefPresentation.BuildPlan(With(Open(1)));
+
+        Assert.Empty(plan.Messages);
+    }
+
+    [Fact]
+    public void No_fee_text_when_the_marker_is_only_established()
+    {
+        var record = Open(1) with { LastLateFeeChargedDay = 5, LateFeesCharged = 0 };
+
+        var plan = Release1ChiefPresentation.BuildPlan(With(record));
+
+        Assert.Empty(plan.Messages);
     }
 }

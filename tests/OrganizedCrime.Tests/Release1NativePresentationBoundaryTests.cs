@@ -42,6 +42,15 @@ public sealed class Release1NativePresentationBoundaryTests
     }
 
     [Fact]
+    public void Boundary_reads_message_history_through_the_private_047_field()
+    {
+        var boundary = ReadNormalized(BoundaryPath);
+
+        Assert.DoesNotContain(".messageHistory", boundary, StringComparison.Ordinal);
+        Assert.Contains("._messageHistory", boundary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Boundary_files_contain_no_Harmony_patches_no_CreateSendableMessage_no_Cursor_and_only_one_NPC_subtype()
     {
         foreach (var path in new[] { NellPath, QuestPath, WrongAddressQuestPath, RoomWithNoNameQuestPath, ShortNoticeQuestPath, KeepTheLightsOffQuestPath, TheEnvelopeQuestPath, BoundaryPath })
@@ -604,6 +613,73 @@ public sealed class Release1NativePresentationBoundaryTests
         return source[start..end];
     }
 
+    // ---- Chapter 3 job quest routing and shape (OC-122) ------------------------------------
+
+    [Fact]
+    public void Boundary_routes_the_chapter3_key_through_all_three_quest_switches()
+    {
+        var boundary = ReadNormalized(BoundaryPath);
+
+        Assert.Equal(3, Count(boundary, "case Chapter3QuestCopy.QuestKey:"));
+        Assert.Contains("private Chapter3JobQuest? _jobQuest;", boundary, StringComparison.Ordinal);
+        Assert.Equal(1, Count(boundary, "CreateQuest<Chapter3JobQuest>()"));
+        Assert.Contains("native ??= CreateQuest<Chapter3JobQuest>();", boundary, StringComparison.Ordinal);
+        Assert.Contains("TryResolveJobQuest(out var found)) return Release1NativePresentationStatus.Faulted;", boundary, StringComparison.Ordinal);
+        Assert.Contains("TryResolveJobQuest(out var native)) return Release1NativePresentationStatus.Faulted;", boundary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Disposable_per_load_policy_ends_the_chapter3_quest_on_save_start()
+    {
+        var boundary = ReadNormalized(BoundaryPath);
+
+        Assert.Contains("TryEndQuest(Chapter3QuestCopy.QuestKey);", boundary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnPreLoad_drops_the_chapter3_cached_quest_field()
+    {
+        var boundary = ReadNormalized(BoundaryPath);
+
+        Assert.Contains("_jobQuest = null;", boundary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Chapter3_job_quest_derives_from_quest_and_titles_from_the_quest_copy()
+    {
+        var quest = ReadNormalized(Chapter3JobQuestPath);
+
+        Assert.Contains("public sealed class Chapter3JobQuest : Quest", quest, StringComparison.Ordinal);
+        Assert.Contains("protected override string Title", quest, StringComparison.Ordinal);
+        Assert.Contains("Chapter3QuestCopy.QuestTitle", quest, StringComparison.Ordinal);
+        Assert.Contains("Chapter3QuestCopy.QuestDescription", quest, StringComparison.Ordinal);
+        Assert.DoesNotContain("QuestName", quest, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Chapter3_job_quest_grows_recreates_and_clears_poi_on_null_marker()
+    {
+        var quest = ReadNormalized(Chapter3JobQuestPath);
+
+        // S1API offers AddEntry but no entry removal: a narrow quest grows in
+        // Project, a wider-than-desired quest still throws, and the boundary
+        // ends and recreates on a count change instead of projecting a shrink.
+        Assert.Contains("while (_entries.Count < quest.Entries.Count)", quest, StringComparison.Ordinal);
+        Assert.Contains("quest.Entries.Count != _entries.Count", quest, StringComparison.Ordinal);
+        Assert.Contains("throw new InvalidOperationException(", quest, StringComparison.Ordinal);
+        // One entry created the way Release 1 does; a null marker clears the
+        // POI for a journal-only line (the OC-117 expansion line) instead of
+        // projecting Vector3.zero onto the map (the OC-93 lesson).
+        Assert.Equal(1, Count(quest, "AddEntry(placeholder, (Vector3?)null)"));
+        Assert.Contains("if (desired.Marker is null)", quest, StringComparison.Ordinal);
+        Assert.Contains("entry.ClearPOI();", quest, StringComparison.Ordinal);
+        Assert.DoesNotContain("Vector3.zero", quest, StringComparison.Ordinal);
+
+        var boundary = ReadNormalized(BoundaryPath);
+        Assert.Contains("native.EntryCount != quest.Entries.Count", boundary, StringComparison.Ordinal);
+        Assert.Contains("native.End();", boundary, StringComparison.Ordinal);
+    }
+
     private static int Count(string text, string value)
     {
         var count = 0;
@@ -637,5 +713,6 @@ public sealed class Release1NativePresentationBoundaryTests
     private static string ShortNoticeQuestPath => Path.Combine(RepositoryRoot, "tools", "OrganizedCrime", "Runtime", "Release1ShortNoticeQuest.cs");
     private static string KeepTheLightsOffQuestPath => Path.Combine(RepositoryRoot, "tools", "OrganizedCrime", "Runtime", "Release1KeepTheLightsOffQuest.cs");
     private static string TheEnvelopeQuestPath => Path.Combine(RepositoryRoot, "tools", "OrganizedCrime", "Runtime", "Release1TheEnvelopeQuest.cs");
+    private static string Chapter3JobQuestPath => Path.Combine(RepositoryRoot, "tools", "OrganizedCrime", "Runtime", "Chapter3JobQuest.cs");
     private static string BoundaryPath => Path.Combine(RepositoryRoot, "tools", "OrganizedCrime", "Runtime", "S1ApiRelease1NativePresentation.cs");
 }

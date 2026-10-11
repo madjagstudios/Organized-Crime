@@ -102,7 +102,8 @@ internal static class FishWarehousePropertyLoadCapturePatch
             var result = captureService.RecordCaptureFailure(
                 activeSaveFolder,
                 generationId,
-                $"Fish Warehouse native property discriminator PropertyCode could not be read: {exception.Message}");
+                $"Fish Warehouse native property discriminator PropertyCode could not be read: {exception.Message}",
+                exception.ToString());
             _log($"WARNING: Fish Warehouse native property load remains suppressed ({result.State}) because PropertyCode could not be read: {result.FailureReason}");
         }
         catch (Exception recordFailure)

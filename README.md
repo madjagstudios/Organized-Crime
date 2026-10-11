@@ -1,12 +1,12 @@
 # Organized Crime
 
-Organized Crime is a story mod for Schedule I: a crime family with a contact who offers you six jobs, an enforcer who calls when you fail, a hidden headquarters you earn, and a police chief who will sell you your own file. Built on MelonLoader and S1API, using the game's own phone, quests, storage, and curfew.
+Organized Crime is a story mod for Schedule I. Version 1.0 brings a crime family with a contact who offers you six jobs, an enforcer who calls when you fail, a hidden headquarters you earn, and a police chief who will sell you your own file. 2.0 adds Chapter 3's repeatable jobs, the Syndicate Warehouse, and police checkpoints, patrols, sweeps, and raids. Built on MelonLoader and S1API, using the game's own phone, quests, storage, and curfew.
 
 ## Requirements
 
 - MelonLoader 0.7.3 or newer
-- S1API Forked 3.2.0 or newer, by ifBars
-- Schedule I, single player
+- S1API Forked 3.2.1 or newer, by ifBars
+- Schedule I 0.4.7, single player
 
 ## Install
 

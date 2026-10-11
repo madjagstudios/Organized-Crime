@@ -1,10 +1,11 @@
+using OrganizedCrime.Runtime.Release1.World;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
 
 public sealed class Release1SmallCourtesyComposition : IDisposable
 {
-    private readonly IRelease1SmallCourtesyWorld _world;
+    private readonly IDeliveryMissionWorld _world;
     private readonly Release1StoryRuntimeService _story;
     private readonly Action<string>? _log;
     private readonly HashSet<string> _reportedAmbiguities = new(StringComparer.Ordinal);
@@ -12,7 +13,7 @@ public sealed class Release1SmallCourtesyComposition : IDisposable
 
     public Release1SmallCourtesyComposition(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IDeliveryMissionWorld world,
         Action<string>? log = null)
     {
         _story = story ?? throw new ArgumentNullException(nameof(story));

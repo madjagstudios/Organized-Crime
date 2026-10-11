@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using OrganizedCrime.Model;
 using OrganizedCrime.Runtime;
 using Xunit;
@@ -192,7 +193,33 @@ public sealed class Release1KeepTheLightsOffProductionGateHarnessTests
 /// IRelease1SmallCourtesyWorld member throws. Every harness test then proves by construction that the
 /// harness touches nothing but the one read, and Tasks 3 to 5 reuse this exact stub.
 /// </summary>
-internal abstract class Release1ProductionOnlyWorld : IRelease1SmallCourtesyWorld
+internal abstract class Release1ProductionOnlyWorld : IProductionActivityWorld
+{
+        public abstract Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity);
+
+}
+
+internal abstract class Release1ProductionMissionWorldStub : IProductionActivityMissionWorld
+{
+        public abstract Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity);
+        public Release1SmallCourtesyWorldReadStatus TryReadContext(out Release1StoryHostContextSnapshot context) => throw new NotSupportedException();
+        public virtual Release1SmallCourtesyWorldReadStatus TryReadCanonicalTotalMinutes(out double totalMinutes) => throw new NotSupportedException();
+
+}
+
+internal abstract class Release1ChiefWorldStub : IChiefWorld
+{
+        public Release1SmallCourtesyWorldReadStatus TryReadContext(out Release1StoryHostContextSnapshot context) => throw new NotSupportedException();
+        public virtual Release1SmallCourtesyWorldReadStatus TryReadCanonicalTotalMinutes(out double totalMinutes) => throw new NotSupportedException();
+        public virtual Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance) => throw new NotSupportedException();
+        public virtual Release1SmallCourtesyWorldMutationStatus TryChangeCashBalance(float amount) => throw new NotSupportedException();
+        public virtual Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount) => throw new NotSupportedException();
+        public virtual Release1SmallCourtesyWorldMutationStatus TryEngageLockdown(out string reason) { reason = string.Empty; throw new NotSupportedException(); }
+        public virtual Release1SmallCourtesyWorldMutationStatus TryReleaseLockdown(out string reason) { reason = string.Empty; throw new NotSupportedException(); }
+
+}
+
+internal abstract class Release1FullWorldStub : IRelease1SmallCourtesyWorld
 {
         public abstract Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity);
 

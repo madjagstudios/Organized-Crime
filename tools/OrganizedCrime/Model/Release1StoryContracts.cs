@@ -262,6 +262,15 @@ public sealed record Release1StoryState
         Validate();
     }
 
+    // OC-118. What a Chief effect's Attempt may reach. Demand payments authorize against the ladder
+    // round, relaxed to the ladder maximum once the cycle closed and an arrest reset may have
+    // cleared the record's own link; protection purchases authorize against the never-resetting
+    // purchase count in both cases, since a reset clears the lists but never the count.
+    private static int ChiefEffectAttemptCeiling(Release1TransitionKind kind, bool closedCycle, Release1ChiefRecord record) =>
+        kind == Release1TransitionKind.ChiefProtectionAccepted
+            ? record.ProtectionPurchases
+            : closedCycle ? Release1ChiefRecord.MaximumDemandRound : record.DemandRound;
+
     public string PlayerId { get; init; }
     public int Standing { get; init; }
     public Release1RelationshipState RelationshipState { get; init; }
@@ -423,10 +432,10 @@ public sealed record Release1StoryState
                     !Release1LogicalCorrelation.TryParse(effect.AuthorizedStoryCorrelationId, out var chiefAuthorization) ||
                     chiefAuthorization.PlayerId != PlayerId || chiefAuthorization.MissionKey != effect.MissionKey ||
                     chiefAuthorization.Attempt != effect.Attempt ||
-                    chiefAuthorization.TransitionKind != Release1TransitionKind.ChiefPaymentAccepted ||
+                    chiefAuthorization.TransitionKind is not (Release1TransitionKind.ChiefPaymentAccepted or Release1TransitionKind.ChiefProtectionAccepted) ||
                     !string.Equals(effect.EffectKind, "CashTransfer", StringComparison.Ordinal) ||
                     effect.PreparedStoryRevision > Revision ||
-                    effect.Attempt > (closedCycle ? Release1ChiefRecord.MaximumDemandRound : ChiefRecord.DemandRound) ||
+                    effect.Attempt > ChiefEffectAttemptCeiling(chiefAuthorization.TransitionKind, closedCycle, ChiefRecord) ||
                     effect.AuthorizedMissionRevision > ChiefRecord.Revision ||
                     (!closedCycle && !ChiefRecord.NativeEffectIds.Contains(effect.EffectId, StringComparer.Ordinal)) ||
                     (!closedCycle && !ChiefRecord.AcceptedLogicalCorrelations.Contains(effect.AuthorizedStoryCorrelationId, StringComparer.Ordinal)))
@@ -458,9 +467,13 @@ public sealed record Release1StoryState
             foreach (var effectId in ChiefRecord.NativeEffectIds)
             {
                 var chiefEffect = NativeEffects.SingleOrDefault(candidate => candidate.EffectId == effectId);
+                // OC-118. The journal entry carries no transition kind of its own, so the ceiling
+                // comes from its authorization correlation: a listed effect always has one, since
+                // the forward check above rejects Chief effects without it.
                 if (chiefEffect is null ||
                     !string.Equals(chiefEffect.MissionKey, Release1MissionCatalog.ChiefCampbell, StringComparison.Ordinal) ||
-                    chiefEffect.Attempt > ChiefRecord.DemandRound)
+                    !Release1LogicalCorrelation.TryParse(chiefEffect.AuthorizedStoryCorrelationId, out var chiefEffectAuthorization) ||
+                    chiefEffect.Attempt > ChiefEffectAttemptCeiling(chiefEffectAuthorization.TransitionKind, false, ChiefRecord))
                     throw new ArgumentException("Chief Campbell record effect references were not durable and contextual.", nameof(ChiefRecord));
             }
         }

@@ -26,7 +26,14 @@ public enum Release1TransitionKind
     /// cases describes a mission state that exists for a scope key absent from
     /// Release1MissionCatalog.All.
     /// </summary>
-    ChiefPaymentAccepted
+    ChiefPaymentAccepted,
+
+    /// <summary>
+    /// OC-118. Authorizes one of the Chief's protection CashTransfers and nothing else. Like
+    /// ChiefPaymentAccepted, it lives outside the mission switch: the Chief's own branch of
+    /// authorization checks it against his record's ProtectionPurchases instead of DemandRound.
+    /// </summary>
+    ChiefProtectionAccepted
 }
 
 public sealed record Release1StoryCommand(

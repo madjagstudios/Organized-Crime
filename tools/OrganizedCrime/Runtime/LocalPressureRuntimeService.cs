@@ -26,6 +26,7 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
     private long _lastAcceptedTotalGameMinutes;
     private uint? _lastAcceptedSequence;
     private bool _disposed;
+    private LocalPressureRuntimeRejectReason _quarantineReason;
 
     public LocalPressureRuntimeService(
         ILocalPressureRuntimeHostAdapter adapter,
@@ -59,6 +60,60 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
     public LocalPressureRuntimePhase Phase => _phase;
     public LocalPressureRuntimeRejectReason LastRejectReason { get; private set; }
     public long? AcceptedClockTotalGameMinutes => _hasAcceptedClock ? _lastAcceptedTotalGameMinutes : null;
+
+    // Owner QA: change heat and reset decay timing; preserve evidence, grace and identity.
+    // No fabricated evidence or rising Chief events. Existing save path stores this state.
+    internal Chapter3QaResult QaSetTier(LocalPressureTier tier)
+    {
+        lock (_evidenceSync)
+        {
+            if (_disposed || _phase != LocalPressureRuntimePhase.Active ||
+                ReadHostAuthority() != LocalPressureHostAuthorityReadStatus.Ready ||
+                !TryResolveSinglePlayer(out var player) || string.IsNullOrWhiteSpace(player.PlayerId))
+                return new(false, "heat refused: authoritative active host identity required.");
+            var heat = tier switch
+            {
+                LocalPressureTier.Quiet => (LocalPressureProfile.MinimumHeat + _profile.QuietUpperBound) / 2,
+                LocalPressureTier.Noticed => (_profile.NoticedLowerBound + _profile.NoticedUpperBound) / 2,
+                LocalPressureTier.Watched => (_profile.WatchedLowerBound + _profile.WatchedUpperBound) / 2,
+                LocalPressureTier.Critical => (_profile.CriticalLowerBound + LocalPressureProfile.MaximumHeat) / 2,
+                _ => -1
+            };
+            if (heat < 0) return new(false, "heat refused: unknown tier.");
+            if (!TryReadClock(out var clock) || !ValidateClock(clock))
+                return new(false, "heat refused: current host clock unavailable or invalid.");
+            if (_hasAcceptedClock && clock.TotalGameMinutes < _lastAcceptedTotalGameMinutes)
+            {
+                Reject(LocalPressureRuntimeRejectReason.ClockRewound, quarantine: true);
+                return new(false, "heat paused: clock rewound; save and reload.");
+            }
+            var old = GetOrCreateState(player.PlayerId!);
+            _states[player.PlayerId!] = new LocalPressureState(heat, old.KnownOffender,
+                old.LastEvidenceGameTime, old.QuietGraceUntil, clock.TotalGameMinutes / 60.0,
+                old.PlayerId, old.Region, old.PropertyCode, old.Revision + 1) { LastAppliedRaidCoolingId = old.LastAppliedRaidCoolingId };
+            return new(true, $"heat: {tier} ({heat}); existing record and native pursuit preserved.");
+        }
+    }
+
+    internal IReadOnlyList<string> QaStatus() =>
+        _phase == LocalPressureRuntimePhase.Quarantined && _quarantineReason == LocalPressureRuntimeRejectReason.ClockRewound
+            ? new[] { "heat paused: clock rewound; save and reload. D4 forced Wanted is blocked until reload." }
+            : new[] { $"heat runtime: {_phase}; reason={LastRejectReason}." };
+
+    // Heat only: no crime, Chief, pursuit or tier-event writer is called.
+    internal bool TryApplyRaidCooling(string raidId)
+    {
+        lock (_evidenceSync)
+        {
+            if (_disposed || _phase != LocalPressureRuntimePhase.Active ||
+                string.IsNullOrWhiteSpace(raidId) || raidId.Length > LocalPressureSaveCodec.MaximumContextLength ||
+                raidId.Any(char.IsControl) || ReadHostAuthority() != LocalPressureHostAuthorityReadStatus.Ready ||
+                !TryResolveSinglePlayer(out var player) || string.IsNullOrWhiteSpace(player.PlayerId)) return false;
+            var old = GetOrCreateState(player.PlayerId!);
+            _states[player.PlayerId!] = LocalPressureTransitions.ApplyRaidCooling(old, _profile, raidId);
+            return true;
+        }
+    }
 
     public bool TryGetState(string playerId, out LocalPressureState? state)
     {
@@ -129,6 +184,7 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
         }
 
         LoadEpoch++;
+        _quarantineReason = LocalPressureRuntimeRejectReason.None;
         ResetTransitionSinkForEpoch();
         _repository = null;
         _loadRetryPending = false;
@@ -249,7 +305,7 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
         ClearAcceptedClock();
         SetPhase(LocalPressureRuntimePhase.AwaitingHostBaseline);
         ClearRejectReason();
-        _receiptLog($"Local Pressure repository hydrated; players={_states.Count}; loadEpoch={LoadEpoch}.");
+        OrganizedCrimeLog.Diagnostic($"Local Pressure repository hydrated; players={_states.Count}; loadEpoch={LoadEpoch}.", _receiptLog);
     }
 
     public void OnClockBoundary(LocalPressureClockBoundary boundary)
@@ -390,7 +446,7 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
         CommitClock(sample);
         SetPhase(LocalPressureRuntimePhase.Active);
         ClearRejectReason();
-        _receiptLog($"Local Pressure runtime Active; playerId={player.PlayerId}; loadEpoch={LoadEpoch}.");
+        OrganizedCrimeLog.Diagnostic($"Local Pressure runtime Active; playerId={player.PlayerId}; loadEpoch={LoadEpoch}.", _receiptLog);
     }
 
     public void OnSaveStart()
@@ -415,7 +471,7 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
         _saveSnapshot = _states.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         SetPhase(LocalPressureRuntimePhase.Saving);
         ClearRejectReason();
-        _log($"Local Pressure SaveStart snapshot: players={_saveSnapshot.Count}; loadEpoch={LoadEpoch}.");
+        OrganizedCrimeLog.Diagnostic($"Local Pressure SaveStart snapshot: players={_saveSnapshot.Count}; loadEpoch={LoadEpoch}.", _receiptLog);
     }
 
     public void OnSaveComplete()
@@ -487,7 +543,7 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
         _states[player.PlayerId!] = state;
         SetPhase(LocalPressureRuntimePhase.Active);
         ClearRejectReason();
-        _log($"Local Pressure sidecar write succeeded; playerId={player.PlayerId}; revision={state.Revision}; loadEpoch={LoadEpoch}.");
+        OrganizedCrimeLog.Diagnostic($"Local Pressure sidecar write succeeded; playerId={player.PlayerId}; revision={state.Revision}; loadEpoch={LoadEpoch}.", _receiptLog);
     }
 
     public void Dispose()
@@ -757,7 +813,7 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
             playerId,
             player.Region ?? state.Region,
             player.PropertyCode ?? state.PropertyCode,
-            state.Revision);
+            state.Revision) { LastAppliedRaidCoolingId = state.LastAppliedRaidCoolingId };
     }
 
     private LocalPressureState GetOrCreateState(
@@ -1032,7 +1088,12 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
     {
         SetRejectReason(reason);
         if (quarantine)
+        {
+            // Lifecycle refusals can replace LastRejectReason during a save;
+            // retain the quarantine cause for recovery guidance until reload.
+            _quarantineReason = reason;
             SetPhase(LocalPressureRuntimePhase.Quarantined);
+        }
     }
 
     private void SetPhase(LocalPressureRuntimePhase phase)
@@ -1041,7 +1102,11 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
             return;
 
         _phase = phase;
-        _receiptLog($"Local Pressure phase changed: {phase}; loadEpoch={LoadEpoch}.");
+        var receipt = $"Local Pressure phase changed: {phase}; loadEpoch={LoadEpoch}.";
+        if (phase == LocalPressureRuntimePhase.Quarantined)
+            _receiptLog(receipt);
+        else
+            OrganizedCrimeLog.Diagnostic(receipt, _receiptLog);
     }
 
     private void SetRejectReason(LocalPressureRuntimeRejectReason reason)
@@ -1050,7 +1115,11 @@ public sealed class LocalPressureRuntimeService : IDisposable, ILocalPressureCus
             return;
 
         LastRejectReason = reason;
-        _log($"Local Pressure readiness/reject reason changed: {reason}; phase={_phase}; loadEpoch={LoadEpoch}.");
+        var receipt = $"Local Pressure readiness/reject reason changed: {reason}; phase={_phase}; loadEpoch={LoadEpoch}.";
+        if (reason == LocalPressureRuntimeRejectReason.None)
+            OrganizedCrimeLog.Diagnostic(receipt, _receiptLog);
+        else
+            _log(receipt);
     }
 
     private void ClearRejectReason() => SetRejectReason(LocalPressureRuntimeRejectReason.None);

@@ -1,4 +1,5 @@
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 using UnityEngine;
 
 namespace OrganizedCrime.Runtime;
@@ -45,7 +46,7 @@ public sealed class FishWarehouseGarageOpeningHost
             return true;
         }
 
-        if (!IsAlive(anchor) || !IsAlive(propertyRoot))
+        if (!UnityLife.IsAlive(anchor) || !UnityLife.IsAlive(propertyRoot))
         {
             log?.Invoke("Fish Warehouse garage preflight rejected: anchor or property root was unavailable.");
             return false;
@@ -234,7 +235,7 @@ public sealed class FishWarehouseGarageOpeningHost
                 () =>
                 {
                     var targetColliderIds = _preflight.TargetColliders
-                        .Where(IsAlive)
+                        .Where(UnityLife.IsAlive)
                         .Select(collider => collider.GetInstanceID())
                         .ToHashSet();
                     return _physicsQuery is not null &&
@@ -268,10 +269,10 @@ public sealed class FishWarehouseGarageOpeningHost
     public bool Restore(Action<string>? log = null)
     {
         bool restored = _preflight is null || _mutation is null ||
-            _mutation.Restore(new UnityTargetState(_preflight.TargetFaces, _preflight.TargetColliders));
+            _mutation.Restore(new UnityTargetState(_preflight.TargetFaces, _preflight.TargetColliders, restoring: true));
         _opened = false;
         if (!restored)
-            log?.Invoke("Fish Warehouse garage restore was partial because a recorded direct target component no longer existed or rejected restoration.");
+            log?.Invoke("Fish Warehouse garage restore was partial because a recorded direct target component rejected restoration.");
         return restored;
     }
 
@@ -325,7 +326,7 @@ public sealed class FishWarehouseGarageOpeningHost
         alternateRoot = null;
         selection = null;
         GameObject[] sceneObjects = Resources.FindObjectsOfTypeAll<GameObject>()
-            .Where(gameObject => IsAlive(gameObject) && gameObject.scene.IsValid())
+            .Where(gameObject => UnityLife.IsAlive(gameObject) && gameObject.scene.IsValid())
             .DistinctBy(gameObject => gameObject.GetInstanceID())
             .ToArray();
         var nodes = sceneObjects.Select(gameObject => new FishWarehouseGarageSceneNode(
@@ -402,7 +403,7 @@ public sealed class FishWarehouseGarageOpeningHost
         IDictionary<string, Renderer> renderersByIdentity,
         IDictionary<string, Collider> collidersByIdentity)
     {
-        foreach (Renderer renderer in node.GetComponents<Renderer>().Where(IsAlive))
+        foreach (Renderer renderer in node.GetComponents<Renderer>().Where(UnityLife.IsAlive))
         {
             string identity = renderer.GetInstanceID().ToString();
             components.Add(new FishWarehouseGarageTargetComponent(
@@ -413,7 +414,7 @@ public sealed class FishWarehouseGarageOpeningHost
             renderersByIdentity.Add(identity, renderer);
         }
 
-        foreach (Collider collider in node.GetComponents<Collider>().Where(IsAlive))
+        foreach (Collider collider in node.GetComponents<Collider>().Where(UnityLife.IsAlive))
         {
             string identity = collider.GetInstanceID().ToString();
             components.Add(new FishWarehouseGarageTargetComponent(
@@ -475,7 +476,7 @@ public sealed class FishWarehouseGarageOpeningHost
                     Physics.AllLayers,
                     QueryTriggerInteraction.Ignore);
                 float[] nonTargetHitLocalYs = hits
-                    .Where(hit => IsAlive(hit.collider))
+                    .Where(hit => UnityLife.IsAlive(hit.collider))
                     .Where(hit => !targetColliderIds.Contains(hit.collider.GetInstanceID()))
                     .Select(hit => anchor.InverseTransformPoint(hit.point).y)
                     .ToArray();
@@ -550,18 +551,6 @@ public sealed class FishWarehouseGarageOpeningHost
         return string.Join("/", parts);
     }
 
-    private static bool IsAlive(UnityEngine.Object? value)
-    {
-        try
-        {
-            return value is not null && value != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     private static string FormatBounds(Bounds bounds) =>
         $"center=({bounds.center.x:0.000},{bounds.center.y:0.000},{bounds.center.z:0.000});extents=({bounds.extents.x:0.000},{bounds.extents.y:0.000},{bounds.extents.z:0.000})";
 
@@ -593,7 +582,7 @@ public sealed class FishWarehouseGarageOpeningHost
                 Physics.AllLayers,
                 QueryTriggerInteraction.Ignore);
             return overlap
-                .Where(IsAlive)
+                .Where(UnityLife.IsAlive)
                 .DistinctBy(collider => collider.GetInstanceID())
                 .Select(collider =>
                 {
@@ -614,11 +603,13 @@ public sealed class FishWarehouseGarageOpeningHost
     {
         private readonly IReadOnlyDictionary<string, Renderer> _renderers;
         private readonly IReadOnlyDictionary<string, Collider> _colliders;
+        private readonly bool _restoring;
 
-        public UnityTargetState(IEnumerable<Renderer> renderers, IEnumerable<Collider> colliders)
+        public UnityTargetState(IEnumerable<Renderer> renderers, IEnumerable<Collider> colliders, bool restoring = false)
         {
-            _renderers = renderers.ToDictionary(renderer => renderer.GetInstanceID().ToString(), StringComparer.Ordinal);
-            _colliders = colliders.ToDictionary(collider => collider.GetInstanceID().ToString(), StringComparer.Ordinal);
+            _restoring = restoring;
+            _renderers = FishWarehouseGarageTargetLookup.Create(renderers, UnityLife.IsAlive, renderer => renderer.GetInstanceID().ToString());
+            _colliders = FishWarehouseGarageTargetLookup.Create(colliders, UnityLife.IsAlive, collider => collider.GetInstanceID().ToString());
         }
 
         public bool TryGetEnabled(FishWarehouseGarageTargetComponent component, out bool enabled)
@@ -629,11 +620,11 @@ public sealed class FishWarehouseGarageOpeningHost
                 switch (component.Kind)
                 {
                     case FishWarehouseGarageTargetComponentKind.Renderer when
-                        _renderers.TryGetValue(component.Identity, out Renderer? renderer) && IsAlive(renderer):
+                        _renderers.TryGetValue(component.Identity, out Renderer? renderer) && UnityLife.IsAlive(renderer):
                         enabled = renderer.enabled;
                         return true;
                     case FishWarehouseGarageTargetComponentKind.Collider when
-                        _colliders.TryGetValue(component.Identity, out Collider? collider) && IsAlive(collider):
+                        _colliders.TryGetValue(component.Identity, out Collider? collider) && UnityLife.IsAlive(collider):
                         enabled = collider.enabled;
                         return true;
                     default:
@@ -652,14 +643,14 @@ public sealed class FishWarehouseGarageOpeningHost
             {
                 switch (component.Kind)
                 {
-                    case FishWarehouseGarageTargetComponentKind.Renderer when
-                        _renderers.TryGetValue(component.Identity, out Renderer? renderer) && IsAlive(renderer):
-                        renderer.enabled = enabled;
-                        return true;
-                    case FishWarehouseGarageTargetComponentKind.Collider when
-                        _colliders.TryGetValue(component.Identity, out Collider? collider) && IsAlive(collider):
-                        collider.enabled = enabled;
-                        return true;
+                    case FishWarehouseGarageTargetComponentKind.Renderer:
+                        return FishWarehouseGarageTargetLookup.TrySetEnabled(
+                            _renderers, component.Identity, enabled, UnityLife.IsAlive,
+                            static (renderer, value) => renderer.enabled = value, _restoring);
+                    case FishWarehouseGarageTargetComponentKind.Collider:
+                        return FishWarehouseGarageTargetLookup.TrySetEnabled(
+                            _colliders, component.Identity, enabled, UnityLife.IsAlive,
+                            static (collider, value) => collider.enabled = value, _restoring);
                     default:
                         return false;
                 }

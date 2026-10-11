@@ -50,23 +50,29 @@ public sealed class Release1ChiefCompositionTests
         Assert.Equal(1, h.Native.SentMessages.Count(m => m == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.FirstDemandText)));
         Assert.Equal(1, h.Native.SetDecisionCalls);
 
-        // 3. Decline: the reply, exactly once, and the prompt clears.
+        // 3. Decline: the reply, exactly once, and the Pay button stands on the demand decision (OC-75).
         Assert.True(h.Composition.Service.TryDecline());
         h.Tick();
         Assert.Equal(Release1ChiefState.Declined, h.Record!.State);
         Assert.Equal(1, h.Native.SentMessages.Count(m => m == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.DeclineReplyText)));
-        Assert.Null(h.Native.ObservedDecision);
+        Assert.NotNull(h.Native.ObservedDecision);
+        Assert.Equal("chief-campbell-demand-r1", h.Native.ObservedDecision!.Id);
+        Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.StandingText(h.Record!.Demand)), h.Native.ObservedDecision!.Prompt);
+        Assert.Single(h.Native.ObservedDecision!.Labels);
+        Assert.Contains(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PayLabel(h.Record!.Demand)), h.Native.ObservedDecision!.Labels);
+        Assert.DoesNotContain(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.DeclineLabel), h.Native.ObservedDecision!.Labels);
+        Assert.Equal(2, h.Native.SetDecisionCalls);
 
-        // 4. A second arrest raises the price to 20000, delivered exactly once, in both the prompt
+        // 4. A second arrest raises the price to 30000, delivered exactly once, in both the prompt
         // and the option label.
         h.Arrest();
         h.Tick();
         Assert.Equal(Release1ChiefState.DemandOpen, h.Record!.State);
         Assert.Equal(2, h.Record!.DemandRound);
-        Assert.Equal(20_000, h.Record!.Demand);
+        Assert.Equal(30_000, h.Record!.Demand);
         Assert.Equal(1, h.Native.SentMessages.Count(m => m == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.SecondDemandText)));
         Assert.NotNull(h.Native.ObservedDecision);
-        Assert.Contains(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PayLabel(20_000)), h.Native.ObservedDecision!.Labels);
+        Assert.Contains(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PayLabel(30_000)), h.Native.ObservedDecision!.Labels);
 
         // 5. Pay: the wallet falls by exactly the demand, the ledger reads Known Offender false and
         // Local Heat 0 after the wipe, and the effect reaches Committed after the next save.
@@ -76,8 +82,8 @@ public sealed class Release1ChiefCompositionTests
         h.Tick(); // wipe and settle land on this pass (Task 4 also releases the world here, but no lockdown is engaged yet)
         Assert.Equal(Release1ChiefState.Settled, h.Record!.State);
         Assert.Equal(1, h.World.DebitCalls);
-        Assert.Equal(-20_000f, h.World.LastDebitAmount);
-        Assert.Equal(balanceBeforePay - 20_000f, h.World.CashBalance);
+        Assert.Equal(-30_000f, h.World.LastDebitAmount);
+        Assert.Equal(balanceBeforePay - 30_000f, h.World.CashBalance);
         Assert.False(h.Ledger.State!.KnownOffender);
         Assert.Equal(0, h.Ledger.State!.LocalHeat);
         Assert.Equal(1, h.Native.SentMessages.Count(m => m == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PaidText)));
@@ -289,17 +295,14 @@ public sealed class Release1ChiefCompositionTests
         }
     }
 
-    /// <summary>Mirrors Release1ProductionOnlyWorld's own Chief-relevant subset exactly.</summary>
-    private sealed class CompositionFakeWorld : Release1ProductionOnlyWorld
+    /// <summary>Mirrors Release1ChiefWorldStub's own Chief-relevant subset exactly.</summary>
+    private sealed class CompositionFakeWorld : Release1ChiefWorldStub
     {
         public float CashBalance { get; set; } = 100_000f;
         public double? TotalMinutes { get; set; } = 0d;
         public int DebitCalls { get; private set; }
         public float? LastDebitAmount { get; private set; }
         public Release1SmallCourtesyWorldMutationStatus DebitResult { get; set; } = Release1SmallCourtesyWorldMutationStatus.Succeeded;
-
-        public override Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity) =>
-            throw new NotSupportedException();
 
         public override Release1SmallCourtesyWorldReadStatus TryReadCanonicalTotalMinutes(out double totalMinutes)
         {
@@ -357,6 +360,7 @@ public sealed class Release1ChiefCompositionTests
         public Release1ObservedDecision? ObservedDecision;
         public int SetDecisionCalls { get; private set; }
         public Action<Release1PresentationCommand>? LastOnChosen { get; private set; }
+        public Dictionary<string, Action> LastLabeledCallbacks { get; } = new();
 
         public Release1NativePresentationStatus TryEnsureContact() => Release1NativePresentationStatus.Succeeded;
 
@@ -390,6 +394,19 @@ public sealed class Release1ChiefCompositionTests
             return Release1NativePresentationStatus.Succeeded;
         }
 
+        public Release1NativePresentationStatus TrySetLabeledDecision(Release1LabeledDecision decision)
+        {
+            SetDecisionCalls++;
+            var desiredLabels = decision.Options.Select(o => o.Label).ToArray();
+            var existingLabels = ObservedDecision?.Labels ?? Array.Empty<string>();
+            if (!Release1NativePresentationSupport.ShouldBindExistingResponses(existingLabels, desiredLabels))
+                SentMessages.Add(decision.Prompt);
+            ObservedDecision = new Release1ObservedDecision(decision.Id, desiredLabels, decision.Prompt);
+            LastLabeledCallbacks.Clear();
+            foreach (var option in decision.Options) LastLabeledCallbacks[option.Label] = option.OnChosen;
+            return Release1NativePresentationStatus.Succeeded;
+        }
+
         public Release1NativePresentationStatus TryClearDecision()
         {
             ObservedDecision = null;
@@ -407,6 +424,123 @@ public sealed class Release1ChiefCompositionTests
 
         public void OnPreLoad() { }
         public void OnSaveStart() { }
+    }
+
+    [Fact]
+    public void The_chief_composition_offers_and_sells_protection_through_the_wired_seams()
+    {
+        var jobs = 0;
+        var checkpoints = new CompositionFakeCheckpoints();
+        using var h = Harness.Create(() => jobs, checkpoints);
+
+        h.Composition.Update();
+        Assert.False(h.Record!.ProtectionOffered);
+
+        jobs = 3;
+        h.Tick();
+        Assert.True(h.Record!.ProtectionOffered);
+        Assert.Contains(
+            Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ProtectionOfferText()), h.Native.SentMessages);
+        Assert.Contains(
+            Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.BuyProtectionLabel()),
+            h.Native.ObservedDecision!.Labels);
+
+        h.World.CashBalance = 100_000f;
+        Assert.True(h.Composition.Service.TryBuyProtection());
+        h.Tick();
+        h.Tick();
+        Assert.True(h.Composition.Service.IsProtected());
+        Assert.Equal(1, checkpoints.DisableCalls);
+    }
+
+    [Fact]
+    public void The_wired_composition_shows_extend_the_player_day_and_hides_at_the_cap()
+    {
+        // OC-118 review: production used to build the Chief's plan without today, so the
+        // standing button never said Extend and never hid at the banking cap; and the cover
+        // end day must read in the player's (chapter) days, like the quest line.
+        var jobs = 3;
+        using var h = Harness.Create(() => jobs, new CompositionFakeCheckpoints(), playerDay: absolute => absolute - 4);
+        h.World.TotalMinutes = 10 * 1440d;
+        h.Composition.Update();
+        h.Tick();
+        Assert.True(h.Record!.ProtectionOffered);
+        h.World.CashBalance = 100_000f;
+
+        Assert.True(h.Composition.Service.TryBuyProtection());
+        h.Tick();
+        h.Tick();
+        Assert.True(h.Composition.Service.IsProtected());
+        var until = h.Record!.ProtectedUntilDay!.Value;
+        Assert.Contains(
+            Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ExtendProtectionLabel()),
+            h.Native.ObservedDecision!.Labels);
+        Assert.Contains(
+            Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ProtectionCoveredText(until - 4)),
+            h.Native.SentMessages);
+        Assert.DoesNotContain(
+            Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ProtectionCoveredText(until)),
+            h.Native.SentMessages);
+
+        Assert.True(h.Composition.Service.TryBuyProtection());
+        h.Tick();
+        h.Tick();
+        Assert.Null(h.Native.ObservedDecision);
+    }
+
+    [Fact]
+    public void The_protection_offer_reprompts_after_a_restart_until_tapped()
+    {
+        var jobs = 0;
+        using var h = Harness.Create(() => jobs);
+        h.Composition.Update();
+        jobs = 3;
+        h.Tick();
+        Assert.Contains(
+            Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.BuyProtectionLabel()),
+            h.Native.ObservedDecision!.Labels);
+
+        h.Story.OnSaveStart();
+        h.Story.OnSaveComplete();
+        h.Composition.OnSaveComplete();
+        using var restart = h.Restart();
+        restart.Composition.OnLoadComplete();
+        restart.Tick();
+
+        Assert.True(restart.Record!.ProtectionOffered);
+        // Exactly once: the message receipt persisted, so the text is not re-sent; the one
+        // occurrence is the reprompted decision's own prompt, which this fake logs alongside.
+        Assert.Equal(1, restart.Native.SentMessages.Count(
+            m => m == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ProtectionOfferText())));
+        Assert.NotNull(restart.Native.ObservedDecision);
+        Assert.Contains(
+            Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.BuyProtectionLabel()),
+            restart.Native.ObservedDecision!.Labels);
+    }
+
+    private sealed class CompositionFakeCheckpoints : IRelease1ProtectionCheckpointWorld
+    {
+        public int DisableCalls { get; private set; }
+        public int EnabledMask { get; set; } = Release1ProtectionCheckpoints.MaskAll;
+
+        public bool TryDisableAllCheckpoints()
+        {
+            DisableCalls++;
+            EnabledMask = 0;
+            return true;
+        }
+
+        public bool TryReadEnabled(out int mask)
+        {
+            mask = EnabledMask;
+            return true;
+        }
+
+        public bool TryRestoreEnabled(int mask)
+        {
+            EnabledMask |= mask & Release1ProtectionCheckpoints.MaskAll;
+            return true;
+        }
     }
 
     private sealed class Harness : IDisposable
@@ -476,7 +610,10 @@ public sealed class Release1ChiefCompositionTests
             return new Harness(story, Context, Repository, world, observer, ledger, native, composition);
         }
 
-        public static Harness Create()
+        public static Harness Create(
+            Func<int>? chapter3SuccessfulJobs = null,
+            IRelease1ProtectionCheckpointWorld? checkpoints = null,
+            Func<int, int?>? playerDay = null)
         {
             var context = new Release1SmallCourtesyDepositTests.FakeContext();
             var repository = new Release1SmallCourtesyDepositTests.FakeRepository();
@@ -502,7 +639,8 @@ public sealed class Release1ChiefCompositionTests
             var native = new FakeNative();
             var composition = new Release1ChiefComposition(
                 story, world, observer, ledger.Read, ledger.Wipe, ledger.Epochs,
-                Release1PresentationMode.Native, native, message => throw new InvalidOperationException(message));
+                Release1PresentationMode.Native, native, message => throw new InvalidOperationException(message),
+                chapter3SuccessfulJobs, checkpoints, playerDay);
             return new Harness(story, context, repository, world, observer, ledger, native, composition);
         }
 

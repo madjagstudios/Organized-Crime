@@ -5,6 +5,7 @@ using Il2CppScheduleOne.Interaction;
 using UnityEngine;
 using UnityEngine.Events;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 
 namespace OrganizedCrime.Runtime;
 
@@ -109,7 +110,8 @@ public sealed class SyndicateHqDoorObserver : ISyndicateHqDoorSource, IDisposabl
     public long Generation => _subscriptionState.Generation;
     public int SubscriptionCount => _subscriptionState.SubscriptionCount;
     public bool IsCurrent(SyndicateHqDoorFingerprint fingerprint, long generation) =>
-        !_subscriptionState.IsDisposed && !_subscriptionState.IsDetachRequested && generation == _subscriptionState.Generation && ReferenceEquals(_resolution?.Fingerprint, fingerprint) && _subscriptionState.SubscriptionCount == 1;
+        !_subscriptionState.IsDisposed && !_subscriptionState.IsDetachRequested && generation == _subscriptionState.Generation && ReferenceEquals(_resolution?.Fingerprint, fingerprint) && _subscriptionState.SubscriptionCount == 1 &&
+        UnityLife.IsAlive(_resolution?.InteractableObject);
 
     /// <summary>
     /// OC-70 final review fix (finding 2). Its only caller,
@@ -215,7 +217,7 @@ public sealed class SyndicateHqDoorObserver : ISyndicateHqDoorSource, IDisposabl
 
     /// <summary>
     /// OC-70. Reuses <see cref="_retainedResolution"/> when it is still alive (the
-    /// <see cref="UnityEngine.Object"/> overload of <see cref="IsUnityNull(UnityEngine.Object)"/>, the
+    /// <see cref="UnityEngine.Object"/> overload of <see cref="UnityLife.IsUnityNull(UnityEngine.Object)"/>, the
     /// same overload <see cref="SyndicateHqNativeStorageBoundary"/> pins for the same reason); only
     /// falls through to the full scene scan in <see cref="TryResolveExact"/> when it is null or reads
     /// destroyed. Wrapped in one timing receipt so a cache hit and a cache miss are both visible in the
@@ -227,7 +229,9 @@ public sealed class SyndicateHqDoorObserver : ISyndicateHqDoorSource, IDisposabl
         var reason = string.Empty;
         var ok = Timing.Measure("hq/door-resolve", () =>
         {
-            if (_retainedResolution is not null && !IsUnityNull(_retainedResolution.InteractableObject))
+            if (_retainedResolution is not null && !UnityLife.IsAlive(_retainedResolution.InteractableObject))
+                _retainedResolution = null;
+            if (_retainedResolution is not null && !UnityLife.IsUnityNull(_retainedResolution.InteractableObject))
             {
                 found = _retainedResolution;
                 reason = "Retained the exact Nightclub door across the boundary.";
@@ -257,12 +261,12 @@ public sealed class SyndicateHqDoorObserver : ISyndicateHqDoorSource, IDisposabl
         try
         {
             var shellPaths = Resources.FindObjectsOfTypeAll<GameObject>()
-                .Where(gameObject => !IsUnityNull(gameObject) && gameObject.scene.IsValid())
+                .Where(gameObject => !UnityLife.IsUnityNull(gameObject) && gameObject.scene.IsValid())
                 .Select(gameObject => GetTransformPath(gameObject.transform))
                 .Where(path => string.Equals(path, SyndicateHqContract.NightclubShellPath, StringComparison.Ordinal))
                 .ToArray();
             var doors = Resources.FindObjectsOfTypeAll<StaticDoor>()
-                .Where(door => !IsUnityNull(door) && door.gameObject.scene.IsValid())
+                .Where(door => !UnityLife.IsUnityNull(door) && door.gameObject.scene.IsValid())
                 .Where(door => string.Equals(GetTransformPath(door.transform), SyndicateHqContract.NightclubDoorPath, StringComparison.Ordinal))
                 .ToArray();
 
@@ -275,7 +279,7 @@ public sealed class SyndicateHqDoorObserver : ISyndicateHqDoorSource, IDisposabl
             }
 
             var interactable = doors[0].IntObj;
-            if (IsUnityNull(interactable))
+            if (UnityLife.IsUnityNull(interactable))
             {
                 failure = "Exact Nightclub door IntObj was unavailable.";
                 return false;
@@ -322,14 +326,12 @@ public sealed class SyndicateHqDoorObserver : ISyndicateHqDoorSource, IDisposabl
 
     private static SyndicateHqVector3 ToValue(Vector3 value) => new(value.x, value.y, value.z);
     private static string TypeName(object? value) => value?.GetType().FullName ?? string.Empty;
-    private static bool IsUnityNull(object? value) => value is null || value == null;
-    private static bool IsUnityNull(UnityEngine.Object? value) => value == null;
     private static string GetTransformPath(Transform? transform)
     {
-        if (IsUnityNull(transform)) return string.Empty;
+        if (UnityLife.IsUnityNull(transform)) return string.Empty;
         var parts = new List<string>();
         var current = transform;
-        while (!IsUnityNull(current)) { parts.Add(current!.name); current = current.parent; }
+        while (!UnityLife.IsUnityNull(current)) { parts.Add(current!.name); current = current.parent; }
         parts.Reverse();
         return string.Join("/", parts);
     }
@@ -348,6 +350,7 @@ public sealed class SyndicateHqDoorObserver : ISyndicateHqDoorSource, IDisposabl
             failure = null;
             if (_removed) return true;
             if (!_added) { _removed = true; return true; }
+            if (!UnityLife.IsAlive(_target)) { _removed = true; return true; }
             try { _target.onInteractStart.RemoveListener(_listener); _removed = true; return true; }
             catch (Exception ex) { failure = ex.Message; return false; }
         }

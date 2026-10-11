@@ -1,3 +1,5 @@
+using OrganizedCrime.Runtime.Release1.World;
+using OrganizedCrime.Core.Diagnostics;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
@@ -11,7 +13,7 @@ public sealed class Release1RoomWithNoNameMissionService : IDisposable
     private const string ArthurCallerLabel = "Arthur Selby";
 
     private readonly Release1StoryRuntimeService _story;
-    private readonly IRelease1SmallCourtesyWorld _world;
+    private readonly IRoomMissionWorld _world;
     private readonly Release1PhoneCallService? _phone;
     private readonly Action<string> _log;
     private bool _loadActive;
@@ -19,7 +21,7 @@ public sealed class Release1RoomWithNoNameMissionService : IDisposable
     private bool _dismissed;
     private bool _disposed;
     private Release1RoomWithNoNameQuote? _reviewedQuote;
-    private readonly HashSet<string> _reportedHolds = new(StringComparer.Ordinal);
+    private readonly OnceLog _reportedHolds;
     private IRelease1SmallCourtesyDropSubscription? _dropSubscription;
     private string? _boundDropGuid;
     private string? _lockedDropGuid;
@@ -27,7 +29,7 @@ public sealed class Release1RoomWithNoNameMissionService : IDisposable
 
     public Release1RoomWithNoNameMissionService(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IRoomMissionWorld world,
         Release1PhoneCallService? phone = null,
         Action<string>? log = null)
     {
@@ -35,6 +37,7 @@ public sealed class Release1RoomWithNoNameMissionService : IDisposable
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _phone = phone;
         _log = log ?? (_ => { });
+        _reportedHolds = new OnceLog(_log);
     }
 
     public Release1RoomWithNoNameOfferStatus OfferStatus { get; private set; } = Release1RoomWithNoNameOfferStatus.Inactive;
@@ -47,7 +50,7 @@ public sealed class Release1RoomWithNoNameMissionService : IDisposable
         _saving = false;
         _dismissed = false;
         _reviewedQuote = null;
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         RefreshOfferStatus();
         Converge();
     }
@@ -61,7 +64,7 @@ public sealed class Release1RoomWithNoNameMissionService : IDisposable
         _saving = false;
         _dismissed = false;
         _reviewedQuote = null;
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         OfferStatus = Release1RoomWithNoNameOfferStatus.Inactive;
     }
 
@@ -1252,8 +1255,7 @@ public sealed class Release1RoomWithNoNameMissionService : IDisposable
 
     private void ReportHoldOnce(int attempt, string message)
     {
-        if (!_reportedHolds.Add($"a{attempt}:{message}")) return;
-        _log($"Room With No Name attempt {attempt} is holding: {message}");
+        _reportedHolds.Report($"a{attempt}:{message}", $"Room With No Name attempt {attempt} is holding: {message}");
     }
 
     private static Release1ConsignmentFingerprint Fingerprint(Release1RoomWithNoNameAssignment assignment) =>

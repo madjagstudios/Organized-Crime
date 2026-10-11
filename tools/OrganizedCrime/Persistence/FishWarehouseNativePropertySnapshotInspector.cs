@@ -30,10 +30,12 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
     public bool TryInspect(
         byte[] nativePropertyBytes,
         out FishWarehouseNativePropertySnapshot snapshot,
-        out string? failureReason)
+        out string? failureReason,
+        out string? failureDetail)
     {
         snapshot = null!;
         failureReason = null;
+        failureDetail = null;
         if (nativePropertyBytes is null || nativePropertyBytes.Length == 0)
         {
             failureReason = "Fish Warehouse native property bytes were unavailable for inspection.";
@@ -44,12 +46,12 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
         {
             using var document = JsonDocument.Parse(nativePropertyBytes);
             var root = document.RootElement;
-            var objects = ReadObjects(root.GetProperty("Objects"));
-            var employeeRecords = root.GetProperty("Employees");
+            var objects = ReadObjects(ReadRequiredArray(root, "Objects"));
+            var employeeRecords = ReadRequiredArray(root, "Employees");
             var employees = ReadEmployees(employeeRecords);
             snapshot = new FishWarehouseNativePropertySnapshot(
                 ReadPropertyCode(root, employeeRecords),
-                root.GetProperty("IsOwned").GetBoolean(),
+                ReadRequiredBoolean(root, "IsOwned"),
                 Array.AsReadOnly(objects),
                 Array.AsReadOnly(employees));
             return true;
@@ -57,6 +59,7 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or KeyNotFoundException)
         {
             failureReason = $"Fish Warehouse native property inspection failed: {ex.Message}";
+            failureDetail = ex.ToString();
             return false;
         }
     }
@@ -77,7 +80,7 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
                 return new FishWarehouseNativePropertyObjectSnapshot(
                     ReadRequiredString(baseData, "GUID"),
                     ReadRequiredString(baseData, "GridGUID"),
-                    baseData.GetProperty("LoadOrder").GetInt32(),
+                    ReadRequiredInt(baseData, "LoadOrder"),
                     itemId,
                     string.Equals(itemId, "locker", StringComparison.Ordinal),
                     record.GetRawText());
@@ -99,7 +102,7 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
                     ReadRequiredString(baseData, "GUID"),
                     dataType,
                     ReadEmployeeIdentity(baseData, dataType),
-                    baseData.GetProperty("PaidForToday").GetBoolean(),
+                    ReadRequiredBoolean(baseData, "PaidForToday"),
                     ReadEmployeeBedGuid(baseData, record),
                     ReadConfigurationStationGuids(record),
                     record.GetRawText());
@@ -134,10 +137,11 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
         if (baseData.TryGetProperty("Identity", out _))
             return ReadRequiredString(baseData, "Identity");
 
-        if (string.Equals(dataType, "PackagerData", StringComparison.Ordinal))
-            return "Packager";
-
-        return ReadRequiredString(baseData, "Identity");
+        // The 0.4.7 save carries no Identity key: the DataType maps to it,
+        // and an unknown DataType maps to itself so the record still loads
+        // and the replay preserves it as unsupported. Only a missing GUID,
+        // a missing BaseData, or a missing root array fails the warehouse.
+        return FishWarehouseEmployeeIdentity.FromDataType(dataType);
     }
 
     private static string ReadEmployeeBedGuid(JsonElement baseData, JsonElement employeeRecord)
@@ -145,11 +149,21 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
         if (baseData.TryGetProperty("BedGUID", out _))
             return ReadRequiredString(baseData, "BedGUID");
 
+        // A missing Bed is an unassigned-as-yet employee (just hired), not a
+        // corrupt record: it reads as no home, exactly like an explicitly
+        // emptied Bed. A present-but-malformed Bed still fails, mirroring
+        // the replay contract.
         var configuration = ReadConfigurationContents(employeeRecord);
         if (configuration is not { } configurationObject ||
             configurationObject.ValueKind != JsonValueKind.Object ||
             !configurationObject.TryGetProperty("Bed", out var bed))
-            throw new JsonException("Native Fish Warehouse Bed/ObjectGUID was unavailable.");
+            return string.Empty;
+
+        if (bed.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Native Fish Warehouse Bed must be a JSON object.");
+
+        if (!bed.TryGetProperty("ObjectGUID", out _))
+            return string.Empty;
 
         return ReadOptionalString(bed, "ObjectGUID");
     }
@@ -223,7 +237,9 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
 
     private static JsonElement ReadNestedObject(JsonElement record, string propertyName)
     {
-        var value = record.GetProperty(propertyName);
+        if (!record.TryGetProperty(propertyName, out var value))
+            throw new JsonException($"Native Fish Warehouse {propertyName} was missing.");
+
         if (value.ValueKind == JsonValueKind.String)
         {
             using var document = JsonDocument.Parse(value.GetString() ?? string.Empty);
@@ -241,11 +257,47 @@ public sealed class FishWarehouseNativePropertySnapshotInspector
 
     private static string ReadRequiredString(JsonElement element, string propertyName)
     {
-        var value = element.GetProperty(propertyName).GetString();
-        if (string.IsNullOrWhiteSpace(value))
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.String)
+            throw new JsonException($"Native Fish Warehouse {propertyName} was missing.");
+
+        var text = value.GetString();
+        if (string.IsNullOrWhiteSpace(text))
             throw new JsonException($"Native Fish Warehouse {propertyName} was unavailable.");
 
+        return text;
+    }
+
+    private static JsonElement ReadRequiredArray(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value))
+            throw new JsonException($"Native Fish Warehouse {propertyName} was missing.");
+
+        if (value.ValueKind != JsonValueKind.Array)
+            throw new JsonException($"Native Fish Warehouse {propertyName} must be an array.");
+
         return value;
+    }
+
+    private static bool ReadRequiredBoolean(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value))
+            throw new JsonException($"Native Fish Warehouse {propertyName} was missing.");
+
+        if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False)
+            throw new JsonException($"Native Fish Warehouse {propertyName} must be a boolean.");
+
+        return value.GetBoolean();
+    }
+
+    private static int ReadRequiredInt(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value))
+            throw new JsonException($"Native Fish Warehouse {propertyName} was missing.");
+
+        if (!value.TryGetInt32(out var result))
+            throw new JsonException($"Native Fish Warehouse {propertyName} must be an integer.");
+
+        return result;
     }
 
     private static string ReadOptionalString(JsonElement element, string propertyName)

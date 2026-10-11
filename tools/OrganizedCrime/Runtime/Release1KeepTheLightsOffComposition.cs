@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 namespace OrganizedCrime.Runtime;
 
 /// <summary>
@@ -13,7 +14,7 @@ public sealed class Release1KeepTheLightsOffComposition : IDisposable
 
     public Release1KeepTheLightsOffComposition(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IProductionActivityMissionWorld world,
         Release1PhoneCallService phone,
         Action<string>? log = null)
     {

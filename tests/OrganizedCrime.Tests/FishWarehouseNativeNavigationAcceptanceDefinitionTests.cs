@@ -19,7 +19,7 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
     [Fact]
     public void Exposes_each_authoritative_doorway_to_idle_identifier_in_order()
     {
-        for (int index = 0; index < FishWarehouseEmployeeInfrastructureDefinition.Capacity; index++)
+        for (int index = 0; index < FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount; index++)
         {
             Assert.Equal(
                 $"doorway-to-idle-{index}",
@@ -40,7 +40,7 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             FishWarehouseNativeNavigationAcceptanceDefinition.DoorwayToIdleTargetName(
-                FishWarehouseEmployeeInfrastructureDefinition.Capacity));
+                FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount));
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
             FishWarehouseNativeNavigationAcceptanceDefinition.Evaluate(probes);
 
         Assert.True(result.Succeeded);
-        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.Capacity + 2, result.RequiredResourceCount);
+        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount + 2, result.RequiredResourceCount);
         Assert.Empty(result.Failures);
     }
 
@@ -64,7 +64,7 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
             FishWarehouseNativeNavigationAcceptanceDefinition.Evaluate(probes);
 
         Assert.True(result.Succeeded);
-        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.Capacity + 2, result.RequiredResourceCount);
+        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount + 2, result.RequiredResourceCount);
         Assert.Empty(result.Failures);
     }
 
@@ -76,12 +76,12 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
                 Array.Empty<FishWarehouseNativeNavigationProbe>());
 
         Assert.False(result.Succeeded);
-        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.Capacity + 2, result.Failures.Count);
+        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount + 2, result.Failures.Count);
         Assert.Contains(result.Failures, failure =>
             failure.Contains(
                 "missing required probe graph=employee target=employee-exterior-to-doorway",
                 StringComparison.Ordinal));
-        for (int index = 0; index < FishWarehouseEmployeeInfrastructureDefinition.Capacity; index++)
+        for (int index = 0; index < FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount; index++)
         {
             string targetName = $"doorway-to-idle-{index}";
             Assert.Contains(result.Failures, failure =>
@@ -173,7 +173,7 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
             FishWarehouseNativeNavigationAcceptanceDefinition.Evaluate(probes);
 
         Assert.True(result.Succeeded);
-        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.Capacity + 3, result.RequiredResourceCount);
+        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount + 3, result.RequiredResourceCount);
         Assert.Contains(result.AcceptedRequirements, requirement =>
             requirement.AgentTypeId == 0 && requirement.TargetName == "exterior-to-doorway");
     }
@@ -195,8 +195,8 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
             FishWarehouseNativeNavigationAcceptanceDefinition.Evaluate(probes);
 
         Assert.True(result.Succeeded);
-        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.Capacity + 4, result.RequiredResourceCount);
-        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.Capacity + 4, result.AcceptedRequirements.Count);
+        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount + 4, result.RequiredResourceCount);
+        Assert.Equal(FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount + 4, result.AcceptedRequirements.Count);
     }
 
     private static List<FishWarehouseNativeNavigationProbe> CompleteRequiredPathSet() =>
@@ -211,7 +211,7 @@ public sealed class FishWarehouseNativeNavigationAcceptanceDefinitionTests
         .ToList();
 
     private static IEnumerable<FishWarehouseNativeNavigationProbe> CompleteRequiredIdleProbes() =>
-        Enumerable.Range(0, FishWarehouseEmployeeInfrastructureDefinition.Capacity)
+        Enumerable.Range(0, FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount)
             .Select(index => CompleteProbe(
                 FishWarehouseNativeNavigationGraphRole.Employee,
                 $"doorway-to-idle-{index}"));

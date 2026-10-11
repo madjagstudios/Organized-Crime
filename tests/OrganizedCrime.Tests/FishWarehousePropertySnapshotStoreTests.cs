@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using OrganizedCrime.Persistence;
 using Xunit;
 
@@ -123,6 +124,75 @@ public sealed class FishWarehousePropertySnapshotStoreTests
             Assert.True(store.TryRestoreNativeProperty(saveFolder, snapshot, out var restoreFailure), restoreFailure);
             Assert.Equal(bytes, File.ReadAllBytes(renamedPath));
             Assert.False(File.Exists(Path.Combine(saveFolder, "Properties", "Fish Warehouse.json")));
+        }
+        finally
+        {
+            Directory.Delete(saveFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Preserve_failed_inspection_writes_the_bytes_beside_the_sidecar()
+    {
+        var saveFolder = CreateTemporaryFolder();
+        var bytes = Encoding.UTF8.GetBytes("{bad}");
+        var store = new FishWarehousePropertySnapshotStore();
+
+        try
+        {
+            Assert.True(store.TryPreserveFailedInspection(saveFolder, bytes, out var preservedPath, out var failure), failure);
+            Assert.StartsWith(
+                Path.Combine(saveFolder, "OrganizedCrime", "fish-warehouse.failed-inspection."),
+                preservedPath,
+                StringComparison.Ordinal);
+            Assert.EndsWith(".json", preservedPath, StringComparison.Ordinal);
+            Assert.Equal(bytes, File.ReadAllBytes(preservedPath));
+        }
+        finally
+        {
+            Directory.Delete(saveFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Preserve_failed_inspection_keeps_only_the_three_newest_files()
+    {
+        var saveFolder = CreateTemporaryFolder();
+        var directory = Path.Combine(saveFolder, "OrganizedCrime");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "fish-warehouse.failed-inspection.20200101-000000-001.json"), "oldest");
+        File.WriteAllText(Path.Combine(directory, "fish-warehouse.failed-inspection.20200101-000000-002.json"), "older");
+        File.WriteAllText(Path.Combine(directory, "fish-warehouse.failed-inspection.20200101-000000-003.json"), "old");
+        var store = new FishWarehousePropertySnapshotStore();
+
+        try
+        {
+            Assert.True(
+                store.TryPreserveFailedInspection(saveFolder, new byte[] { (byte)'n' }, out var preservedPath, out var failure),
+                failure);
+
+            var kept = Directory.GetFiles(directory, "fish-warehouse.failed-inspection.*.json");
+            Assert.Equal(3, kept.Length);
+            Assert.Contains(preservedPath, kept);
+            Assert.DoesNotContain(Path.Combine(directory, "fish-warehouse.failed-inspection.20200101-000000-001.json"), kept);
+        }
+        finally
+        {
+            Directory.Delete(saveFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Preserve_failed_inspection_rejects_empty_bytes()
+    {
+        var saveFolder = CreateTemporaryFolder();
+        var store = new FishWarehousePropertySnapshotStore();
+
+        try
+        {
+            Assert.False(store.TryPreserveFailedInspection(saveFolder, Array.Empty<byte>(), out _, out var failure));
+            Assert.Contains("unavailable for preservation", failure, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(Path.Combine(saveFolder, "OrganizedCrime")));
         }
         finally
         {

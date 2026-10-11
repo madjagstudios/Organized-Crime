@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using OrganizedCrime.Model;
-using OrganizedCrime.Runtime;
 
 namespace OrganizedCrime.Persistence;
 
@@ -20,8 +19,8 @@ public sealed record Release1StoryCodecResult(bool Succeeded, Release1StoryCodec
 
 public static class Release1StorySaveCodec
 {
-    public const int CurrentSchemaVersion = 11;
-    private static readonly HashSet<int> SupportedReadSchemaVersions = new() { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, CurrentSchemaVersion };
+    public const int CurrentSchemaVersion = 14;
+    private static readonly HashSet<int> SupportedReadSchemaVersions = new() { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, CurrentSchemaVersion };
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -48,11 +47,18 @@ public static class Release1StorySaveCodec
     private static readonly HashSet<string> KeepTheLightsOffProgressFields = Set("missionKey", "attempt", "clearConfirmedAtGameMinutes", "breachSincePassGameMinutes");
     private static readonly HashSet<string> TheEnvelopeAssignmentFields = Set("missionKey", "attempt", "mode", "authorizationCorrelationId", "amountWholeDollars", "holdRoomKey", "expectedClosetCount", "deadlineGameMinutes");
     private static readonly HashSet<string> TheEnvelopeProgressFields = Set("missionKey", "attempt", "observedBalance", "lastShortfallNoticed", "spreadNoticed");
-    private static readonly HashSet<string> ChiefRecordFields = Set(
+    private static readonly HashSet<string> ChiefRecordFieldsV11 = Set(
         "adopted", "adoptedTier", "adoptedKnownOffender", "demandRound", "state", "watchLinesSent",
         "lockdownAnnouncements", "lockdownEngaged", "paidLifts", "cooledLifts", "declineRepliesSent",
         "paymentBlockedNotices", "lastShortfallNoticed",
         "acceptedLogicalCorrelations", "nativeEffectIds", "revision");
+    // v12 adds the late fee fields; v11 documents predate them, so the v11 required set stays
+    // behind while validation allows the wider shape on any v11+ document.
+    private static readonly HashSet<string> ChiefRecordFields = new(ChiefRecordFieldsV11) { "lateFeesCharged", "lastLateFeeChargedDay" };
+    // OC-118. v13 adds the eight protection fields; v12 documents load unprotected and unoffered.
+    private static readonly HashSet<string> ChiefRecordFieldsV13 = new(ChiefRecordFields) { "protectedUntilDay", "protectionOffered", "protectionWarnedForUntilDay", "protectionLapseNotices", "protectionSettleFirstRefusals", "protectionPurchases", "protectionBlockedNotices", "protectionCoverStartCheckpoints" };
+    // OC-74. v14 adds the six forced-Wanted fields; v13 documents load unwarned and unfired.
+    private static readonly HashSet<string> ChiefRecordFieldsV14 = new(ChiefRecordFieldsV13) { "lockdownEngagedAtMinutes", "forcedWantedWarnings", "lastForcedWantedNight", "forcedWantedFires", "forcedWantedDispatches", "forcedWantedDispatchRefusals", "forcedWantedWarnedAtMinutes" };
 
     public static bool TrySerialize(Release1StorySaveEnvelope? envelope, out string json, out Release1StoryCodecResult result)
     {
@@ -327,8 +333,8 @@ public static class Release1StorySaveCodec
         {
             if (chiefRecord.ValueKind != JsonValueKind.Object)
                 return Fail(out result, Release1StoryCodecFailureReason.InvalidJsonType, "chiefRecord was not an object.");
-            if (!ValidateDtoFields(chiefRecord, ChiefRecordFields, out result)) return false;
-            if (!RequireFields(chiefRecord, ChiefRecordFields, out result)) return false;
+            if (!ValidateDtoFields(chiefRecord, ChiefRecordFieldsV14, out result)) return false;
+            if (!RequireFields(chiefRecord, version >= 14 ? ChiefRecordFieldsV14 : version >= 13 ? ChiefRecordFieldsV13 : version >= 12 ? ChiefRecordFields : ChiefRecordFieldsV11, out result)) return false;
         }
         result = Release1StoryCodecResult.Success(); return true;
     }
@@ -393,6 +399,15 @@ public static class Release1StorySaveCodec
         LockdownAnnouncements = record.LockdownAnnouncements, LockdownEngaged = record.LockdownEngaged,
         PaidLifts = record.PaidLifts, CooledLifts = record.CooledLifts, DeclineRepliesSent = record.DeclineRepliesSent,
         PaymentBlockedNotices = record.PaymentBlockedNotices, LastShortfallNoticed = record.LastShortfallNoticed,
+        LateFeesCharged = record.LateFeesCharged, LastLateFeeChargedDay = record.LastLateFeeChargedDay,
+        ProtectedUntilDay = record.ProtectedUntilDay, ProtectionOffered = record.ProtectionOffered,
+        ProtectionWarnedForUntilDay = record.ProtectionWarnedForUntilDay, ProtectionLapseNotices = record.ProtectionLapseNotices,
+        ProtectionSettleFirstRefusals = record.ProtectionSettleFirstRefusals, ProtectionPurchases = record.ProtectionPurchases,
+        ProtectionBlockedNotices = record.ProtectionBlockedNotices, ProtectionCoverStartCheckpoints = record.ProtectionCoverStartCheckpoints,
+        LockdownEngagedAtMinutes = record.LockdownEngagedAtMinutes, ForcedWantedWarnings = record.ForcedWantedWarnings,
+        LastForcedWantedNight = record.LastForcedWantedNight, ForcedWantedFires = record.ForcedWantedFires,
+        ForcedWantedDispatches = record.ForcedWantedDispatches, ForcedWantedDispatchRefusals = record.ForcedWantedDispatchRefusals,
+        ForcedWantedWarnedAtMinutes = record.ForcedWantedWarnedAtMinutes,
         AcceptedLogicalCorrelations = record.AcceptedLogicalCorrelations.ToArray(), NativeEffectIds = record.NativeEffectIds.ToArray(),
         Revision = record.Revision
     };
@@ -402,7 +417,7 @@ public static class Release1StorySaveCodec
     // that point whenever NativeEffects carries a Chief entry (a v11+ document that paid at least
     // once always does).
     private static Release1StoryState FromDto(StoryDto dto, int version) => new(dto.PlayerId!, dto.Standing, dto.RelationshipState, dto.Release1Recognized, dto.IntroLogicalCorrelationIds!, dto.RecognitionLogicalCorrelationIds!, dto.Missions!.Select(FromDto).ToArray(), dto.NativeEffects!.Select(FromDto).ToArray(), dto.Revision,
-        ChiefRecord: version >= 11 && dto.ChiefRecord is not null ? FromDto(dto.ChiefRecord) : null)
+        ChiefRecord: version >= 11 && dto.ChiefRecord is not null ? FromDto(dto.ChiefRecord, version) : null)
     { PhonePresentationAttempts = dto.PhonePresentationAttempts?.Select(FromDto).ToArray() ?? Array.Empty<Release1PhonePresentationAttempt>(), SmallCourtesyAssignments = dto.SmallCourtesyAssignments?.Select(FromDto).ToArray() ?? Array.Empty<Release1SmallCourtesyAssignment>(), PresentationReceipts = dto.PresentationReceipts?.Select(FromDto).ToArray() ?? Array.Empty<Release1PresentationReceipt>(), WrongAddressAssignments = dto.WrongAddressAssignments?.Select(FromDto).ToArray() ?? Array.Empty<Release1WrongAddressAssignment>(), WrongAddressProgress = dto.WrongAddressProgress?.Select(FromDto).ToArray() ?? Array.Empty<Release1WrongAddressProgress>(),
         RoomWithNoNameAssignments = dto.RoomWithNoNameAssignments?.Select(FromDto).ToArray() ?? Array.Empty<Release1RoomWithNoNameAssignment>(),
         RoomWithNoNameProgress = dto.RoomWithNoNameProgress?.Select(FromDto).ToArray() ?? Array.Empty<Release1RoomWithNoNameProgress>(),
@@ -437,11 +452,20 @@ public static class Release1StorySaveCodec
     private static Release1KeepTheLightsOffProgress FromDto(KeepTheLightsOffProgressDto dto) => new(dto.MissionKey!, dto.Attempt, dto.ClearConfirmedAtGameMinutes, dto.BreachSincePassGameMinutes);
     private static Release1TheEnvelopeAssignment FromDto(TheEnvelopeAssignmentDto dto) => new(dto.MissionKey!, dto.Attempt, dto.Mode, dto.AuthorizationCorrelationId!, dto.AmountWholeDollars, dto.HoldRoomKey!, dto.ExpectedClosetCount, dto.DeadlineGameMinutes);
     private static Release1TheEnvelopeProgress FromDto(TheEnvelopeProgressDto dto) => new(dto.MissionKey!, dto.Attempt, dto.ObservedBalance, dto.LastShortfallNoticed, dto.SpreadNoticed);
-    private static Release1ChiefRecord FromDto(ChiefRecordDto dto) => new(
+    private static Release1ChiefRecord FromDto(ChiefRecordDto dto, int version) => new(
         dto.Adopted, dto.AdoptedTier, dto.AdoptedKnownOffender, dto.DemandRound, dto.State, dto.WatchLinesSent,
         dto.LockdownAnnouncements, dto.LockdownEngaged, dto.PaidLifts, dto.CooledLifts, dto.DeclineRepliesSent,
         dto.PaymentBlockedNotices, dto.LastShortfallNoticed,
-        dto.AcceptedLogicalCorrelations ?? Array.Empty<string>(), dto.NativeEffectIds ?? Array.Empty<string>(), dto.Revision);
+        dto.AcceptedLogicalCorrelations ?? Array.Empty<string>(), dto.NativeEffectIds ?? Array.Empty<string>(), dto.Revision,
+        version >= 12 ? dto.LateFeesCharged : 0, version >= 12 ? dto.LastLateFeeChargedDay : null,
+        version >= 13 ? dto.ProtectedUntilDay : null, version >= 13 && dto.ProtectionOffered, version >= 13 ? dto.ProtectionWarnedForUntilDay : null,
+        version >= 13 ? dto.ProtectionLapseNotices : 0, version >= 13 ? dto.ProtectionSettleFirstRefusals : 0,
+        version >= 13 ? dto.ProtectionPurchases : 0, version >= 13 ? dto.ProtectionBlockedNotices : 0,
+        version >= 13 ? dto.ProtectionCoverStartCheckpoints : null,
+        version >= 14 ? dto.LockdownEngagedAtMinutes : null, version >= 14 ? dto.ForcedWantedWarnings : 0,
+        version >= 14 ? dto.LastForcedWantedNight : null, version >= 14 ? dto.ForcedWantedFires : 0,
+        version >= 14 ? dto.ForcedWantedDispatches : 0, version >= 14 ? dto.ForcedWantedDispatchRefusals : 0,
+        version >= 14 ? dto.ForcedWantedWarnedAtMinutes : null);
 
     private sealed class EnvelopeDto { public int SchemaVersion { get; set; } public StoryDto? Story { get; set; } }
     private sealed class StoryDto { public string? PlayerId { get; set; } public int Standing { get; set; } public Release1RelationshipState RelationshipState { get; set; } public bool Release1Recognized { get; set; } public string[]? IntroLogicalCorrelationIds { get; set; } public string[]? RecognitionLogicalCorrelationIds { get; set; } public MissionDto[]? Missions { get; set; } public EffectDto[]? NativeEffects { get; set; } public Release1PhonePresentationAttemptDto[]? PhonePresentationAttempts { get; set; } public SmallCourtesyAssignmentDto[]? SmallCourtesyAssignments { get; set; } public PresentationReceiptDto[]? PresentationReceipts { get; set; } public WrongAddressAssignmentDto[]? WrongAddressAssignments { get; set; } public WrongAddressProgressDto[]? WrongAddressProgress { get; set; } public RoomWithNoNameAssignmentDto[]? RoomWithNoNameAssignments { get; set; } public RoomWithNoNameProgressDto[]? RoomWithNoNameProgress { get; set; } public ShortNoticeAssignmentDto[]? ShortNoticeAssignments { get; set; } public ShortNoticeProgressDto[]? ShortNoticeProgress { get; set; } public KeepTheLightsOffAssignmentDto[]? KeepTheLightsOffAssignments { get; set; } public KeepTheLightsOffProgressDto[]? KeepTheLightsOffProgress { get; set; } public TheEnvelopeAssignmentDto[]? TheEnvelopeAssignments { get; set; } public TheEnvelopeProgressDto[]? TheEnvelopeProgress { get; set; } public ChiefRecordDto? ChiefRecord { get; set; } public long Revision { get; set; } }
@@ -459,6 +483,6 @@ public static class Release1StorySaveCodec
     private sealed class KeepTheLightsOffProgressDto { public string? MissionKey { get; set; } public int Attempt { get; set; } public double? ClearConfirmedAtGameMinutes { get; set; } public double? BreachSincePassGameMinutes { get; set; } }
     private sealed class TheEnvelopeAssignmentDto { public string? MissionKey { get; set; } public int Attempt { get; set; } public Release1TheEnvelopeAssignmentMode Mode { get; set; } public string? AuthorizationCorrelationId { get; set; } public double AmountWholeDollars { get; set; } public string? HoldRoomKey { get; set; } public int ExpectedClosetCount { get; set; } public double? DeadlineGameMinutes { get; set; } }
     private sealed class TheEnvelopeProgressDto { public string? MissionKey { get; set; } public int Attempt { get; set; } public double ObservedBalance { get; set; } public double? LastShortfallNoticed { get; set; } public bool SpreadNoticed { get; set; } }
-    private sealed class ChiefRecordDto { public bool Adopted { get; set; } public LocalPressureTier AdoptedTier { get; set; } public bool AdoptedKnownOffender { get; set; } public int DemandRound { get; set; } public Release1ChiefState State { get; set; } public int WatchLinesSent { get; set; } public int LockdownAnnouncements { get; set; } public bool LockdownEngaged { get; set; } public int PaidLifts { get; set; } public int CooledLifts { get; set; } public int DeclineRepliesSent { get; set; } public int PaymentBlockedNotices { get; set; } public double? LastShortfallNoticed { get; set; } public string[]? AcceptedLogicalCorrelations { get; set; } public string[]? NativeEffectIds { get; set; } public long Revision { get; set; } }
+    private sealed class ChiefRecordDto { public bool Adopted { get; set; } public LocalPressureTier AdoptedTier { get; set; } public bool AdoptedKnownOffender { get; set; } public int DemandRound { get; set; } public Release1ChiefState State { get; set; } public int WatchLinesSent { get; set; } public int LockdownAnnouncements { get; set; } public bool LockdownEngaged { get; set; } public int PaidLifts { get; set; } public int CooledLifts { get; set; } public int DeclineRepliesSent { get; set; } public int PaymentBlockedNotices { get; set; } public double? LastShortfallNoticed { get; set; } public int LateFeesCharged { get; set; } public int? LastLateFeeChargedDay { get; set; } public int? ProtectedUntilDay { get; set; } public bool ProtectionOffered { get; set; } public int? ProtectionWarnedForUntilDay { get; set; } public int ProtectionLapseNotices { get; set; } public int ProtectionSettleFirstRefusals { get; set; } public int ProtectionPurchases { get; set; } public int ProtectionBlockedNotices { get; set; } public int? ProtectionCoverStartCheckpoints { get; set; } public double? LockdownEngagedAtMinutes { get; set; } public int ForcedWantedWarnings { get; set; } public int? LastForcedWantedNight { get; set; } public int ForcedWantedFires { get; set; } public int ForcedWantedDispatches { get; set; } public int ForcedWantedDispatchRefusals { get; set; } public double? ForcedWantedWarnedAtMinutes { get; set; } public string[]? AcceptedLogicalCorrelations { get; set; } public string[]? NativeEffectIds { get; set; } public long Revision { get; set; } }
     private sealed class EffectDto { public string? EffectId { get; set; } public string? MissionKey { get; set; } public int Attempt { get; set; } public string? EffectKind { get; set; } public string? SourceIdentity { get; set; } public string? DestinationIdentity { get; set; } public string? AmountOrCargoIdentity { get; set; } public Release1NativeEffectPhase Phase { get; set; } public string? NativeReceiptId { get; set; } public long PreparedStoryRevision { get; set; } public string? CommittedStoryCorrelationId { get; set; } public string? AuthorizedStoryCorrelationId { get; set; } public bool ExecutionBlocked { get; set; } public long AuthorizedMissionRevision { get; set; } }
 }

@@ -17,19 +17,22 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.UI.Management;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Composition;
+using OrganizedCrime.Runtime.Platform;
+using OrganizedCrime.Runtime.Qa;
 using UnityEngine;
 using UnityEngine.AI;
 
 namespace OrganizedCrime.Runtime;
 
-public sealed class RuntimePropertyHost : IRuntimePropertyHost
+public sealed class RuntimePropertyHost : IRuntimePropertyHost, IFishWarehouseLightingOwnerQa, IFishWarehousePropertyHost
 {
     private const string DocksWarehouseCode = "dockswarehouse";
     private const string IdentityJson = "{\"propertyCode\":\"oc_fishwarehouse\",\"propertyName\":\"Syndicate Warehouse\"}";
 
     private GameObject? _root;
     private NetworkObject? _networkObject;
-    private Property? _property;
+    internal Property? _property;
     private PrefabObjects? _bucket;
     private NetworkManager? _networkManager;
     private ServerManager? _serverManager;
@@ -37,6 +40,8 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
     private Transform? _anchor;
     private FishWarehouseBuildSurfaceHost? _buildSurface;
     private FishWarehouseInteriorRoomHost? _interiorRoom;
+    internal FishWarehouseLightingHost? _lighting;
+    private FishWarehouseGarageJambHost? _garageJambs;
     private FishWarehouseGarageOpeningHost? _garageOpening;
     private FishWarehouseNativeNavigationHost? _navigation;
     private FishWarehouseGarageCrossingHost? _garageCrossing;
@@ -45,7 +50,8 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
     private FishWarehouseContinuousNavigationState _employeeNavigationState =
         FishWarehouseContinuousNavigationState.Inactive;
     private FishWarehousePropertyBoundsHost? _propertyBounds;
-    private FishWarehouseEmployeeInfrastructureHost? _employeeInfrastructure;
+    private FishWarehouseEmployeeInfrastructureHost<Transform>? _employeeInfrastructure;
+    private FishWarehousePlayerSpawnHost<Transform>? _playerSpawns;
     private FishWarehouseFrontageClearanceHost? _frontageClearance;
     private bool _frontageClearanceCleanupPending;
     private FishWarehouseLoadingDockHost? _loadingDocks;
@@ -56,6 +62,13 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
     private bool _persistenceObjectReplayRequired;
     private bool _persistenceObjectsReplayed;
     private int? _persistenceEmployeeAgentTypeId;
+
+    private readonly FishWarehouseLampTuningQa _lampTuning;
+
+    public RuntimePropertyHost()
+    {
+        _lampTuning = new FishWarehouseLampTuningQa(this);
+    }
 
     public Property? CurrentProperty => _property;
     public Transform? CurrentAnchor => _anchor;
@@ -74,10 +87,192 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
     public int? EmployeeNavigationAgentTypeId =>
         EmployeeNavigationReady ? _navigation?.ResolvedEmployeeAgentTypeId : null;
     public bool PersistenceRuntimeReady =>
-        IsAlive(_property) &&
+        UnityLife.IsAlive(_property) &&
         Read(() => _property!.IsOwned) &&
         _buildSurface?.IsReady == true &&
         RuntimePropertyDefinition.FishWarehouse.HasBuildGridGuid(_buildSurface.GridGuid);
+
+    /// <summary>
+    /// OC-117: the tier capacity (plus pending replay count) the employee
+    /// infrastructure attach reads. Wired by Mod.cs over the Chapter 3
+    /// service and the capture service; null means tier 1 with no
+    /// pending replay.
+    /// </summary>
+    public IFishWarehouseEmployeeCapacitySource? EmployeeCapacitySource { get; set; }
+
+    public bool IsEmployeeInfrastructureReady =>
+        _employeeInfrastructure?.IsReady == true && UnityLife.IsAlive(_property);
+
+    /// <summary>
+    /// OC-117: the live tier raise. False when the infrastructure is not
+    /// attached; a pending build applies the tier at attach instead.
+    /// </summary>
+    public bool TrySetEmployeeCapacity(int capacity)
+    {
+        var infrastructure = _employeeInfrastructure;
+        if (infrastructure is null || !infrastructure.IsReady || !UnityLife.IsAlive(_property))
+            return false;
+        return infrastructure.TryRaiseCapacity(capacity, Log);
+    }
+
+    /// <summary>
+    /// OC-117: the Property's live capacity and idle-point count, for
+    /// owner QA. False when the Property is gone.
+    /// </summary>
+    public bool TryReadEmployeeCapacity(out int capacity, out int idlePointCount)
+    {
+        capacity = 0;
+        idlePointCount = 0;
+        var property = _property;
+        if (!UnityLife.IsAlive(property))
+            return false;
+        try
+        {
+            capacity = property!.EmployeeCapacity;
+            idlePointCount = property.EmployeeIdlePoints?.Length ?? 0;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Owner QA only (OwnerQaKeys): moves all created idle points into a 5 x 4 block, 0.8 m
+    /// apart, centred on the local player's ground point with its rows square to the player's
+    /// facing, then logs every point's warehouse-local position for baking into
+    /// <see cref="FishWarehouseEmployeeInfrastructureDefinition"/>. The points' staging root
+    /// sits at the Property's identity, so a staging local position is a Property-local one.
+    /// Employees keep the same Transform objects and walk to the new spots on their next
+    /// idle.
+    /// </summary>
+    public bool TryMoveIdlePointsToPlayer(out string report)
+    {
+        const int columns = 5;
+        const float spacing = 0.8f;
+        var infrastructure = _employeeInfrastructure;
+        var property = _property;
+        if (infrastructure is null || !infrastructure.IsReady || !UnityLife.IsAlive(property))
+        {
+            report = "Chapter 3 QA capacity here refused: the warehouse is not attached.";
+            return false;
+        }
+        if (!PlayerSingleton<PlayerMovement>.InstanceExists || !UnityLife.IsAlive(PlayerSingleton<PlayerMovement>.Instance))
+        {
+            report = "Chapter 3 QA capacity here refused: the local player movement was unavailable.";
+            return false;
+        }
+
+        var points = infrastructure.CreatedIdlePoints;
+        var rows = (points.Count + columns - 1) / columns;
+        var player = PlayerSingleton<PlayerMovement>.Instance.transform;
+        var origin = player.position;
+        if (Physics.Raycast(origin + Vector3.up * 0.5f, Vector3.down, out var hit, 5f))
+            origin = hit.point;
+        var frame = property!.transform;
+        var centre = frame.InverseTransformPoint(origin);
+        var forward = frame.InverseTransformDirection(player.forward);
+        forward.y = 0f;
+        forward = forward.sqrMagnitude < 0.0001f ? Vector3.forward : forward.normalized;
+        var right = new Vector3(forward.z, 0f, -forward.x);
+
+        var text = new System.Text.StringBuilder(
+            $"OC-117 idle group placed at the player (warehouse-local, {points.Count} points):");
+        for (var index = 0; index < points.Count; index++)
+        {
+            var column = index % columns;
+            var row = index / columns;
+            var local = centre +
+                right * ((column - (columns - 1) / 2f) * spacing) +
+                forward * ((row - (rows - 1) / 2f) * spacing);
+            points[index].localPosition = local;
+            text.Append($" [{index}] ({local.x:F2}, {local.y:F2}, {local.z:F2})");
+        }
+
+        report = text.ToString();
+        return true;
+    }
+
+    // Owner QA only (OwnerQaKeys): reports the runtime player spawn world positions and
+    // whether the Property fields still point at them.
+    public bool TryReadPlayerSpawns(out FishWarehousePlayerSpawnQaSnapshot snapshot)
+    {
+        snapshot = UnassignedPlayerSpawns();
+        try
+        {
+            var property = _property;
+            var spawns = _playerSpawns;
+            if (!UnityLife.IsAlive(property) || spawns is null || !spawns.IsReady)
+                return false;
+            var exterior = property!.SpawnPoint;
+            var interior = property.InteriorSpawnPoint;
+            var exteriorPosition = UnityLife.IsAlive(exterior) ? exterior!.position : Vector3.zero;
+            var interiorPosition = UnityLife.IsAlive(interior) ? interior!.position : Vector3.zero;
+            var exteriorRetained = false;
+            var interiorRetained = false;
+            try
+            {
+                exteriorRetained = exterior == spawns.CreatedExterior;
+                interiorRetained = interior == spawns.CreatedInterior;
+            }
+            catch
+            {
+            }
+            snapshot = new(
+                exteriorPosition.x, exteriorPosition.y, exteriorPosition.z, UnityLife.IsAlive(exterior), exteriorRetained,
+                interiorPosition.x, interiorPosition.y, interiorPosition.z, UnityLife.IsAlive(interior), interiorRetained);
+            return true;
+        }
+        catch
+        {
+            snapshot = UnassignedPlayerSpawns();
+            return false;
+        }
+    }
+
+    // Owner QA only (OwnerQaKeys): moves one player spawn point to the local player for the
+    // session and reports its room-frame coordinates with yaw, so a chosen spot can be baked
+    // into the definition.
+    public bool TryMovePlayerSpawnToPlayer(bool exterior, out string report)
+    {
+        report = "Chapter 3 QA spawn here refused: the warehouse is not attached.";
+        var property = _property;
+        if (!UnityLife.IsAlive(property) || _playerSpawns is null || !_playerSpawns.IsReady)
+            return false;
+        if (!PlayerSingleton<PlayerMovement>.InstanceExists || !UnityLife.IsAlive(PlayerSingleton<PlayerMovement>.Instance))
+        {
+            report = "Chapter 3 QA spawn here refused: the local player movement was unavailable.";
+            return false;
+        }
+
+        var spawn = exterior ? property!.SpawnPoint : property!.InteriorSpawnPoint;
+        if (!UnityLife.IsAlive(spawn))
+        {
+            report = $"Chapter 3 QA spawn here refused: the {(exterior ? "exterior" : "interior")} spawn point is missing.";
+            return false;
+        }
+
+        var player = PlayerSingleton<PlayerMovement>.Instance.transform;
+        spawn!.position = player.position;
+        spawn.rotation = Quaternion.Euler(0f, player.eulerAngles.y, 0f);
+        var frame = property!.transform;
+        var local = frame.InverseTransformPoint(player.position);
+        var forward = frame.InverseTransformDirection(player.forward);
+        forward.y = 0f;
+        forward = forward.sqrMagnitude < 0.0001f ? Vector3.forward : forward.normalized;
+        var yaw = MathF.Atan2(forward.x, forward.z) * (180f / MathF.PI);
+        if (yaw < 0f)
+            yaw += 360f;
+        var name = exterior
+            ? FishWarehousePlayerSpawnDefinition.PlayerExteriorSpawn.Name
+            : FishWarehousePlayerSpawnDefinition.PlayerInteriorSpawn.Name;
+        report = $"OC-139 {name} moved to the player (room-frame): ({local.x:F2}, {local.y:F2}, {local.z:F2}) yaw {yaw:F1}";
+        return true;
+    }
+
+    private static FishWarehousePlayerSpawnQaSnapshot UnassignedPlayerSpawns() =>
+        new(0f, 0f, 0f, false, false, 0f, 0f, 0f, false, false);
 
     public RuntimePropertyHostResult Start(RuntimePropertyDefinition definition)
     {
@@ -101,146 +296,246 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
         try
         {
-            var anchor = FindAnchor(definition.AnchorPath);
-            if (anchor is null)
-                return RuntimePropertyHostResult.Failure(stage, $"Physical anchor was not found: {definition.AnchorPath}");
-            _anchor = anchor.transform;
+            var result = StartPreconditions(definition, stage);
+            if (result is not null)
+                return result;
 
-            var docksProperty = FindProperty(DocksWarehouseCode);
-            var docksNetworkObject = docksProperty is null ? null : ResolveNetworkObject(docksProperty);
-            _networkManager = docksNetworkObject?.NetworkManager;
-            _serverManager = InstanceFinder.ServerManager;
-            _authoredCollection = _networkManager?.SpawnablePrefabs;
-            if (docksProperty is null || docksNetworkObject is null || _networkManager is null)
-                return RuntimePropertyHostResult.Failure(stage, "Docks Warehouse or its NetworkManager was not found.");
+            result = StartIdentity(definition, ref stage, propertyRegistered, networkRegistrationPassed, spawnPassed);
+            if (result is not null)
+                return result;
 
-            if (_authoredCollection is null)
-                return RuntimePropertyHostResult.Failure(stage, "Authored FishNet prefab collection was unavailable.");
+            result = StartPropertyBounds(ref stage, propertyRegistered, networkRegistrationPassed, spawnPassed);
+            if (result is not null)
+                return result;
 
-            if (_serverManager is null || !Read(() => _serverManager.OneServerStarted()))
-                return RuntimePropertyHostResult.Failure(stage, "A started FishNet server is required; client-only lifecycle is not enabled in this slice.");
+            result = StartEmployeeInfrastructure(ref stage, propertyRegistered, networkRegistrationPassed, spawnPassed);
+            if (result is not null)
+                return result;
 
-            if (FindProperty(definition.PropertyCode) is not null)
-                return RuntimePropertyHostResult.Failure(stage, $"Property code {definition.PropertyCode} is already registered.");
+            result = StartPlayerSpawns(ref stage, propertyRegistered, networkRegistrationPassed, spawnPassed);
+            if (result is not null)
+                return result;
 
-            if (_networkManager.GetPrefabObjects<SinglePrefabObjects>(definition.RuntimeCollectionId, false) is not null)
-                return RuntimePropertyHostResult.Failure(stage, $"Runtime prefab collection {definition.RuntimeCollectionId} already exists.");
+            result = StartLoadingDocks(ref stage, propertyRegistered, networkRegistrationPassed, spawnPassed);
+            if (result is not null)
+                return result;
 
-            _docksBefore = CaptureDocksIdentity(docksNetworkObject);
-            _root = new GameObject(definition.RootName);
-            _root.transform.SetPositionAndRotation(anchor.transform.position, anchor.transform.rotation);
-            _root.SetActive(false);
-            _networkObject = _root.AddComponent<NetworkObject>();
-            _property = _root.AddComponent<Property>();
+            result = StartPropertyRegistration(definition, ref stage, ref propertyRegistered, networkRegistrationPassed, spawnPassed);
+            if (result is not null)
+                return result;
 
-            stage = "identity";
-            JsonUtility.FromJsonOverwrite(IdentityJson, _property);
-            if (!string.Equals(_property.PropertyCode, definition.PropertyCode, StringComparison.Ordinal) ||
-                !string.Equals(_property.PropertyName, definition.DisplayName, StringComparison.Ordinal))
-            {
-                return FailAndCleanup(stage, "Serialized Property identity did not apply.", propertyRegistered, networkRegistrationPassed, spawnPassed);
-            }
+            StartNetworkInitialization(ref stage);
 
-            stage = "property-bounds";
-            _propertyBounds = new FishWarehousePropertyBoundsHost();
-            if (!_propertyBounds.TryAttach(_property, Log))
-            {
-                return FailAndCleanup(
-                    stage,
-                    "Authored Property bounds could not be attached.",
-                    propertyRegistered,
-                    networkRegistrationPassed,
-                    spawnPassed);
-            }
+            result = StartNetworkRegistration(definition, ref stage, propertyRegistered, ref networkRegistrationPassed, spawnPassed);
+            if (result is not null)
+                return result;
 
-            stage = "employee-infrastructure";
-            _employeeInfrastructure = new FishWarehouseEmployeeInfrastructureHost();
-            if (!_employeeInfrastructure.TryAttach(_property, Log))
-            {
-                return FailAndCleanup(
-                    stage,
-                    "Employee infrastructure could not be attached.",
-                    propertyRegistered,
-                    networkRegistrationPassed,
-                    spawnPassed);
-            }
-
-            stage = "loading-docks";
-            _frontageClearance = new FishWarehouseFrontageClearanceHost();
-            if (!_frontageClearance.TryAttach(_property, Log))
-            {
-                _frontageClearanceCleanupPending = !_frontageClearance.Dispose(Log);
-                if (!_frontageClearanceCleanupPending)
-                    _frontageClearance = null;
-                else
-                    return FailAndCleanup(stage, "Frontage clearance cleanup remained partial.", propertyRegistered, networkRegistrationPassed, spawnPassed);
-                LogWarning("Fish Warehouse will continue without loading docks; frontage clearance could not be established safely.");
-            }
-
-            _loadingDocks = new FishWarehouseLoadingDockHost();
-            if (_frontageClearance is null || !_loadingDocks.TryAttach(_property, Log))
-            {
-                _loadingDocks.Dispose();
-                _loadingDocks = null;
-                if (_frontageClearance is not null)
-                {
-                    _frontageClearanceCleanupPending = !_frontageClearance.Dispose(Log);
-                    if (!_frontageClearanceCleanupPending)
-                        _frontageClearance = null;
-                    else
-                        return FailAndCleanup(stage, "Frontage clearance cleanup remained partial after loading dock setup failed.", propertyRegistered, networkRegistrationPassed, spawnPassed);
-                }
-                LogWarning("Fish Warehouse will continue without loading docks; existing Property features remain available.");
-            }
-
-            stage = "property-registration";
-            RegisterPropertyCollections(_property);
-            propertyRegistered = FindProperty(definition.PropertyCode) == _property;
-            if (!propertyRegistered)
-                return FailAndCleanup(stage, "Temporary Property was not observable in the vanilla Property collection.", propertyRegistered, networkRegistrationPassed, spawnPassed);
-
-            stage = "network-initialization";
-            _property.InitializeSaveable();
-            _root.SetActive(true);
-            byte componentIndex = 0;
-            _networkObject.UpdateNetworkBehaviours(null, ref componentIndex);
-            _property.NetworkInitializeIfDisabled();
-            stage = "network-registration";
-            _bucket = _networkManager.GetPrefabObjects<SinglePrefabObjects>(definition.RuntimeCollectionId, true);
-            if (_bucket is null)
-                return FailAndCleanup(stage, "Runtime prefab collection creation returned null.", propertyRegistered, networkRegistrationPassed, spawnPassed);
-
-            var beforeCount = ReadInt(() => _bucket.GetObjectCount());
-            _bucket.AddObject(_networkObject, true);
-            var afterCount = ReadInt(() => _bucket.GetObjectCount());
-            networkRegistrationPassed = afterCount > beforeCount;
-            if (!networkRegistrationPassed)
-                return FailAndCleanup(stage, "Runtime prefab registration did not increase the collection count.", propertyRegistered, networkRegistrationPassed, spawnPassed);
-
-            stage = "spawn";
-            _serverManager.Spawn(_networkObject, null, _root.scene);
-            var postSpawnNetworkObjectSpawned = Read(() => _networkObject.IsSpawned);
-            var postSpawnNetworkObjectServerInitialized = Read(() => _networkObject.IsServerInitialized);
-            var postSpawnPropertyNetworked = Read(() => _property.IsNetworked);
-            var postSpawnPropertyClientInitialized = Read(() => _property.IsClientInitialized);
-            var postSpawnPropertyServerInitialized = Read(() => _property.IsServerInitialized);
-            var postSpawnPropertySpawned = Read(() => _property.IsSpawned);
-            spawnPassed = postSpawnNetworkObjectSpawned &&
-                postSpawnNetworkObjectServerInitialized &&
-                postSpawnPropertySpawned;
-            if (!spawnPassed)
-            {
-                var state = $"networkObjectSpawned={postSpawnNetworkObjectSpawned}, networkObjectServerInitialized={postSpawnNetworkObjectServerInitialized}, propertyNetworked={postSpawnPropertyNetworked}, propertyClientInitialized={postSpawnPropertyClientInitialized}, propertyServerInitialized={postSpawnPropertyServerInitialized}, propertySpawned={postSpawnPropertySpawned}";
-                return FailAndCleanup(stage, $"Spawn returned without a spawned/server-initialized Property root ({state}).", propertyRegistered, networkRegistrationPassed, spawnPassed);
-            }
-
-            return BuildResult(true, "spawn", propertyRegistered, networkRegistrationPassed, spawnPassed, true, null);
+            return StartSpawn(ref stage, propertyRegistered, networkRegistrationPassed, ref spawnPassed);
         }
         catch (Exception ex)
         {
             return FailAndCleanup(stage, ex.ToString(), propertyRegistered, networkRegistrationPassed, spawnPassed);
         }
     }
+
+    // StartPreconditions establishes these fields before the later steps run.
+    // Nullable flow analysis cannot carry those assignments across private calls.
+#pragma warning disable CS8602, CS8604
+    private RuntimePropertyHostResult? StartPreconditions(RuntimePropertyDefinition definition, string stage)
+    {
+        var anchor = FindAnchor(definition.AnchorPath);
+        if (anchor is null)
+            return RuntimePropertyHostResult.Failure(stage, $"Physical anchor was not found: {definition.AnchorPath}");
+        _anchor = anchor.transform;
+
+        var docksProperty = FindProperty(DocksWarehouseCode);
+        var docksNetworkObject = docksProperty is null ? null : ResolveNetworkObject(docksProperty);
+        _networkManager = docksNetworkObject?.NetworkManager;
+        _serverManager = InstanceFinder.ServerManager;
+        _authoredCollection = _networkManager?.SpawnablePrefabs;
+        if (docksProperty is null || docksNetworkObject is null || _networkManager is null)
+            return RuntimePropertyHostResult.Failure(stage, "Docks Warehouse or its NetworkManager was not found.");
+
+        if (_authoredCollection is null)
+            return RuntimePropertyHostResult.Failure(stage, "Authored FishNet prefab collection was unavailable.");
+
+        if (_serverManager is null || !Read(() => FishNetHostGate.IsStartedOrFalse(_serverManager)))
+            return RuntimePropertyHostResult.Failure(stage, "A started FishNet server is required; client-only lifecycle is not enabled in this slice.");
+
+        if (FindProperty(definition.PropertyCode) is not null)
+            return RuntimePropertyHostResult.Failure(stage, $"Property code {definition.PropertyCode} is already registered.");
+
+        if (_networkManager.GetPrefabObjects<SinglePrefabObjects>(definition.RuntimeCollectionId, false) is not null)
+            return RuntimePropertyHostResult.Failure(stage, $"Runtime prefab collection {definition.RuntimeCollectionId} already exists.");
+
+        _docksBefore = CaptureDocksIdentity(docksNetworkObject);
+        _root = new GameObject(definition.RootName);
+        _root.transform.SetPositionAndRotation(anchor.transform.position, anchor.transform.rotation);
+        _root.SetActive(false);
+        _networkObject = _root.AddComponent<NetworkObject>();
+        _property = _root.AddComponent<Property>();
+
+        return null;
+    }
+
+    private RuntimePropertyHostResult? StartIdentity(RuntimePropertyDefinition definition, ref string stage, bool propertyRegistered, bool networkRegistrationPassed, bool spawnPassed)
+    {
+        stage = "identity";
+        JsonUtility.FromJsonOverwrite(IdentityJson, _property);
+        if (!string.Equals(_property.PropertyCode, definition.PropertyCode, StringComparison.Ordinal) ||
+            !string.Equals(_property.PropertyName, definition.DisplayName, StringComparison.Ordinal))
+        {
+            return FailAndCleanup(stage, "Serialized Property identity did not apply.", propertyRegistered, networkRegistrationPassed, spawnPassed);
+        }
+
+        return null;
+    }
+
+    private RuntimePropertyHostResult? StartPropertyBounds(ref string stage, bool propertyRegistered, bool networkRegistrationPassed, bool spawnPassed)
+    {
+        stage = "property-bounds";
+        _propertyBounds = new FishWarehousePropertyBoundsHost();
+        if (!_propertyBounds.TryAttach(_property, Log))
+        {
+            return FailAndCleanup(
+                stage,
+                "Authored Property bounds could not be attached.",
+                propertyRegistered,
+                networkRegistrationPassed,
+                spawnPassed);
+        }
+
+        return null;
+    }
+
+    private RuntimePropertyHostResult? StartEmployeeInfrastructure(ref string stage, bool propertyRegistered, bool networkRegistrationPassed, bool spawnPassed)
+    {
+        stage = "employee-infrastructure";
+        _employeeInfrastructure = new FishWarehouseEmployeeInfrastructureHost<Transform>();
+        var infrastructureTarget = new FishWarehousePropertyInfrastructureTarget(_property);
+        if (!_employeeInfrastructure.TryAttach(infrastructureTarget, EmployeeCapacitySource, Log))
+        {
+            return FailAndCleanup(
+                stage,
+                "Employee infrastructure could not be attached.",
+                propertyRegistered,
+                networkRegistrationPassed,
+                spawnPassed);
+        }
+
+        return null;
+    }
+
+    private RuntimePropertyHostResult? StartPlayerSpawns(ref string stage, bool propertyRegistered, bool networkRegistrationPassed, bool spawnPassed)
+    {
+        stage = "player-spawns";
+        _playerSpawns = new FishWarehousePlayerSpawnHost<Transform>();
+        if (!_playerSpawns.TryAttach(new FishWarehousePropertySpawnTarget(_property), LogWarning))
+        {
+            return FailAndCleanup(
+                stage,
+                "Player spawn points could not be attached.",
+                propertyRegistered,
+                networkRegistrationPassed,
+                spawnPassed);
+        }
+
+        return null;
+    }
+
+    private RuntimePropertyHostResult? StartLoadingDocks(ref string stage, bool propertyRegistered, bool networkRegistrationPassed, bool spawnPassed)
+    {
+        stage = "loading-docks";
+        _frontageClearance = new FishWarehouseFrontageClearanceHost();
+        if (!_frontageClearance.TryAttach(_property, Log))
+        {
+            _frontageClearanceCleanupPending = !_frontageClearance.Dispose(Log);
+            if (!_frontageClearanceCleanupPending)
+                _frontageClearance = null;
+            else
+                return FailAndCleanup(stage, "Frontage clearance cleanup remained partial.", propertyRegistered, networkRegistrationPassed, spawnPassed);
+            LogWarning("Fish Warehouse will continue without loading docks; frontage clearance could not be established safely.");
+        }
+
+        _loadingDocks = new FishWarehouseLoadingDockHost();
+        if (_frontageClearance is null || !_loadingDocks.TryAttach(_property, Log))
+        {
+            _loadingDocks.Dispose();
+            _loadingDocks = null;
+            if (_frontageClearance is not null)
+            {
+                _frontageClearanceCleanupPending = !_frontageClearance.Dispose(Log);
+                if (!_frontageClearanceCleanupPending)
+                    _frontageClearance = null;
+                else
+                    return FailAndCleanup(stage, "Frontage clearance cleanup remained partial after loading dock setup failed.", propertyRegistered, networkRegistrationPassed, spawnPassed);
+            }
+            LogWarning("Fish Warehouse will continue without loading docks; existing Property features remain available.");
+        }
+
+        return null;
+    }
+
+    private RuntimePropertyHostResult? StartPropertyRegistration(RuntimePropertyDefinition definition, ref string stage, ref bool propertyRegistered, bool networkRegistrationPassed, bool spawnPassed)
+    {
+        stage = "property-registration";
+        RegisterPropertyCollections(_property);
+        propertyRegistered = FindProperty(definition.PropertyCode) == _property;
+        if (!propertyRegistered)
+            return FailAndCleanup(stage, "Temporary Property was not observable in the vanilla Property collection.", propertyRegistered, networkRegistrationPassed, spawnPassed);
+
+        return null;
+    }
+
+    private void StartNetworkInitialization(ref string stage)
+    {
+        stage = "network-initialization";
+        _property.InitializeSaveable();
+        _root.SetActive(true);
+        byte componentIndex = 0;
+        _networkObject.UpdateNetworkBehaviours(null, ref componentIndex);
+        _property.NetworkInitializeIfDisabled();
+    }
+
+    private RuntimePropertyHostResult? StartNetworkRegistration(RuntimePropertyDefinition definition, ref string stage, bool propertyRegistered, ref bool networkRegistrationPassed, bool spawnPassed)
+    {
+        stage = "network-registration";
+        _bucket = _networkManager.GetPrefabObjects<SinglePrefabObjects>(definition.RuntimeCollectionId, true);
+        if (_bucket is null)
+            return FailAndCleanup(stage, "Runtime prefab collection creation returned null.", propertyRegistered, networkRegistrationPassed, spawnPassed);
+
+        var beforeCount = ReadInt(() => _bucket.GetObjectCount());
+        _bucket.AddObject(_networkObject, true);
+        var afterCount = ReadInt(() => _bucket.GetObjectCount());
+        networkRegistrationPassed = afterCount > beforeCount;
+        if (!networkRegistrationPassed)
+            return FailAndCleanup(stage, "Runtime prefab registration did not increase the collection count.", propertyRegistered, networkRegistrationPassed, spawnPassed);
+
+        return null;
+    }
+
+    private RuntimePropertyHostResult StartSpawn(ref string stage, bool propertyRegistered, bool networkRegistrationPassed, ref bool spawnPassed)
+    {
+        stage = "spawn";
+        _serverManager.Spawn(_networkObject, null, _root.scene);
+        var postSpawnNetworkObjectSpawned = Read(() => _networkObject.IsSpawned);
+        var postSpawnNetworkObjectServerInitialized = Read(() => _networkObject.IsServerInitialized);
+        var postSpawnPropertyNetworked = Read(() => _property.IsNetworked);
+        var postSpawnPropertyClientInitialized = Read(() => _property.IsClientInitialized);
+        var postSpawnPropertyServerInitialized = Read(() => _property.IsServerInitialized);
+        var postSpawnPropertySpawned = Read(() => _property.IsSpawned);
+        spawnPassed = postSpawnNetworkObjectSpawned &&
+            postSpawnNetworkObjectServerInitialized &&
+            postSpawnPropertySpawned;
+        if (!spawnPassed)
+        {
+            var state = $"networkObjectSpawned={postSpawnNetworkObjectSpawned}, networkObjectServerInitialized={postSpawnNetworkObjectServerInitialized}, propertyNetworked={postSpawnPropertyNetworked}, propertyClientInitialized={postSpawnPropertyClientInitialized}, propertyServerInitialized={postSpawnPropertyServerInitialized}, propertySpawned={postSpawnPropertySpawned}";
+            return FailAndCleanup(stage, $"Spawn returned without a spawned/server-initialized Property root ({state}).", propertyRegistered, networkRegistrationPassed, spawnPassed);
+        }
+
+        return BuildResult(true, "spawn", propertyRegistered, networkRegistrationPassed, spawnPassed, true, null);
+    }
+#pragma warning restore CS8602, CS8604
 
     public RuntimePropertyHostResult Stop()
     {
@@ -271,7 +566,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
         var despawnPassed = true;
         var cleanupPassed = true;
-        var propertyRegistered = _property is not null && FindProperty(_definition?.PropertyCode ?? string.Empty) == _property;
+        var propertyRegistered = CleanupPropertyIsRegistered();
         if (_continuousNavigationCoordinator is not null && !_continuousNavigationCoordinator.Stop())
         {
             _employeeNavigationState = FishWarehouseContinuousNavigationState.Failed;
@@ -299,10 +594,16 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
             _loadingDocks = null;
             _employeeInfrastructure?.Dispose();
             _employeeInfrastructure = null;
+            _playerSpawns?.Dispose();
+            _playerSpawns = null;
             _propertyBounds?.Dispose();
             _propertyBounds = null;
             _buildSurface?.Dispose();
             _buildSurface = null;
+            _lighting?.Dispose();
+            _lighting = null;
+            _garageJambs?.Dispose();
+            _garageJambs = null;
             _interiorRoom?.Dispose();
             _interiorRoom = null;
             if (_networkObject is not null && Read(() => _networkObject.IsSpawned))
@@ -349,7 +650,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
             try
             {
                 RemovePropertyCollections(_property);
-                propertyRegistered = FindProperty(_definition?.PropertyCode ?? string.Empty) == _property;
+                propertyRegistered = CleanupPropertyIsRegistered();
                 cleanupPassed &= !propertyRegistered;
             }
             catch (Exception ex)
@@ -363,7 +664,9 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         {
             try
             {
-                cleanupPassed &= _networkManager.RemoveSpawnableCollection(_definition.RuntimeCollectionId);
+                cleanupPassed &= RuntimePropertyCleanup.Clean(_bucket, UnityLife.IsAlive,
+                    _ => RuntimePropertyCleanup.Clean(_networkManager, UnityLife.IsAlive,
+                        manager => manager.RemoveSpawnableCollection(_definition.RuntimeCollectionId)));
             }
             catch (Exception ex)
             {
@@ -376,7 +679,11 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         {
             try
             {
-                UnityEngine.Object.DestroyImmediate(_root);
+                cleanupPassed &= RuntimePropertyCleanup.Clean(_root, UnityLife.IsAlive, root =>
+                {
+                    UnityEngine.Object.DestroyImmediate(root);
+                    return true;
+                });
             }
             catch (Exception ex)
             {
@@ -409,6 +716,10 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         Clear();
         return result;
     }
+
+    private bool CleanupPropertyIsRegistered() => RuntimePropertyCleanup.IsRegistered(
+        _property, () => FindProperty(_definition?.PropertyCode ?? string.Empty),
+        UnityLife.IsAlive, (found, property) => found == property);
 
     public bool TrySetOwned()
     {
@@ -493,7 +804,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
                 LogWarning("Fish Warehouse ownership succeeded, but employee navigation is unavailable because the native build surface or employee infrastructure did not restore.");
             }
 
-            Log("Fish Warehouse runtime Property is owned in memory. No direct save write was performed; a normal game save persists the Organized Crime sidecar.");
+            OrganizedCrimeLog.Diagnostic("Fish Warehouse runtime Property is owned in memory. No direct save write was performed; a normal game save persists the Organized Crime sidecar.", Log);
         }
         else
         {
@@ -505,7 +816,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
     public void UpdateOwnedFeatures()
     {
-        if (!IsAlive(_property) || _property?.IsOwned != true || _continuousNavigationCoordinator is null ||
+        if (!UnityLife.IsAlive(_property) || _property?.IsOwned != true || _continuousNavigationCoordinator is null ||
             (_persistenceObjectReplayRequired && !_persistenceObjectsReplayed))
             return;
 
@@ -529,14 +840,14 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
     /// <summary>
     /// Deterministically populates Organized Crime's loading dock from an arrived
-    /// delivery van (OC-7), so a dock→interior route always has its source even when
-    /// the native VehicleDetector → SetOccupant chain does not fire on the cloned
+    /// delivery van (OC-7), so a dock->interior route always has its source even when
+    /// the native VehicleDetector -> SetOccupant chain does not fire on the cloned
     /// dock. Independent of navigation readiness (a delivery can arrive first); runs
     /// only on the authoritative host (UpdateOwnedFeatures is host-gated upstream).
     /// </summary>
     private void UpdateDockDeliveryBridge()
     {
-        if (!IsAlive(_property))
+        if (!UnityLife.IsAlive(_property))
             return;
 
         _dockDeliveryBridge ??= new FishWarehouseDockDeliveryBridgeHost();
@@ -545,13 +856,13 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
     /// <summary>
     /// Assists Organized Crime's employees across the garage off-mesh link during
-    /// dock→interior routes (OC-7). Runs only once native navigation is Ready and
+    /// dock->interior routes (OC-7). Runs only once native navigation is Ready and
     /// only on the authoritative host (UpdateOwnedFeatures is host-gated upstream).
     /// </summary>
     private void UpdateGarageCrossingAssist()
     {
         if (_continuousNavigationCoordinator?.State != FishWarehouseContinuousNavigationState.Ready ||
-            !IsAlive(_property))
+            !UnityLife.IsAlive(_property))
         {
             return;
         }
@@ -566,8 +877,8 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
     private Vector3 ComputeGarageWorldCenter()
     {
         FishWarehouseGarageOpeningProjection? projection = _garageOpening?.Preflight?.Projection;
-        if (projection is null || !IsAlive(_anchor))
-            return IsAlive(_property) ? _property!.transform.position : Vector3.zero;
+        if (projection is null || !UnityLife.IsAlive(_anchor))
+            return UnityLife.IsAlive(_property) ? _property!.transform.position : Vector3.zero;
 
         FishWarehouseTransitionPrism prism = projection.TransitionPrism;
         var center = new Vector3(
@@ -575,6 +886,58 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
             (prism.MinimumY + prism.MaximumY) / 2f,
             (prism.MinimumZ + prism.MaximumZ) / 2f);
         return _anchor!.TransformPoint(center);
+    }
+
+    public bool LightingActive => _interiorRoom?.IsReady == true && _lighting?.IsActive == true;
+
+    public bool TryAddLampAbovePlayer() =>
+        _lampTuning.TryAddLampAbovePlayer();
+
+    public bool TryRemoveMostRecentLamp() =>
+        _lampTuning.TryRemoveMostRecentLamp();
+
+    public bool TryAdjustMostRecentLampHeight(float delta) =>
+        _lampTuning.TryAdjustMostRecentLampHeight(delta);
+
+    public bool TryAdjustAllLampIntensity(float delta) =>
+        _lampTuning.TryAdjustAllLampIntensity(delta);
+
+    public bool TryToggleMostRecentLampYaw() =>
+        _lampTuning.TryToggleMostRecentLampYaw();
+
+    public bool TryLogLampLayout() =>
+        _lampTuning.TryLogLampLayout();
+
+    private void TryActivateLighting()
+    {
+        try
+        {
+            if (!UnityLife.IsAlive(_property))
+                return;
+
+            _lighting ??= new FishWarehouseLightingHost();
+            _lighting.TryActivate(_property!.transform, FishWarehouseLightingDefinition.Default, Log);
+        }
+        catch
+        {
+            // Lighting failure never blocks the room, ownership, or the grid.
+        }
+    }
+
+    private void TryActivateGarageJambs(FishWarehouseGarageOpeningProjection projection)
+    {
+        try
+        {
+            if (!UnityLife.IsAlive(_property))
+                return;
+
+            _garageJambs ??= new FishWarehouseGarageJambHost();
+            _garageJambs.TryActivate(_property!.transform, projection, _interiorRoom?.SharedMaterial, Log);
+        }
+        catch
+        {
+            // Jamb failure never blocks the room, garage, grid, or lamps.
+        }
     }
 
     public bool TryPlaceEmployeeHome()
@@ -618,7 +981,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         }
 
         var employeeManager = EmployeeManager.Instance;
-        if (!IsAlive(employeeManager))
+        if (!UnityLife.IsAlive(employeeManager))
         {
             failureReason = "Fish Warehouse employee replay adapter requires a live EmployeeManager.";
             return false;
@@ -646,7 +1009,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
         var property = _property;
         var buildSurface = _buildSurface;
-        if (!IsAlive(property) || buildSurface is null)
+        if (!UnityLife.IsAlive(property) || buildSurface is null)
             return FishWarehouseEmployeeHomeAdoptionResult.Failed;
 
         var matches = new List<(BuildableItem Buildable, EmployeeHome Home)>();
@@ -654,11 +1017,11 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         {
             foreach (var employeeHome in UnityEngine.Object.FindObjectsOfType<EmployeeHome>())
             {
-                if (!IsAlive(employeeHome))
+                if (!UnityLife.IsAlive(employeeHome))
                     continue;
 
                 var buildable = employeeHome.GetComponent<BuildableItem>();
-                if (!IsAlive(buildable) || buildable!.ParentProperty != property)
+                if (!UnityLife.IsAlive(buildable) || buildable!.ParentProperty != property)
                     continue;
 
                 matches.Add((buildable, employeeHome));
@@ -675,10 +1038,10 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
         // Each employee's own home is restored independently from that employee's
         // captured bed GUID; this property-level step only adopts ONE representative
-        // locker — for the optional navigation probe and to suppress the authored
+        // locker -- for the optional navigation probe and to suppress the authored
         // no-locker fallback. Multiple lockers are legitimate (a player who hires
-        // several handlers owns several homes), so pick one deterministically —
-        // preferring a locker whose GUID matches a saved employee-home GUID — rather
+        // several handlers owns several homes), so pick one deterministically --
+        // preferring a locker whose GUID matches a saved employee-home GUID -- rather
         // than failing the whole replay. Adopting exactly one is required: adopting
         // none would let the authored no-locker fallback place a spurious duplicate.
         var candidateGuids = new List<string?>(matches.Count);
@@ -776,7 +1139,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
             var attached = _property.WorldspaceUIContainer == container &&
                 container.parent == canvas.Canvas.transform;
             if (attached)
-                Log("Fish Warehouse management worldspace UI container enabled under the vanilla management canvas.");
+                OrganizedCrimeLog.Diagnostic("Fish Warehouse management worldspace UI container enabled under the vanilla management canvas.", Log);
             return attached;
         }
         catch (Exception ex)
@@ -790,14 +1153,14 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
     private void DisposeManagementWorldspaceUiContainer()
     {
-        if (_property is not null &&
-            _property.WorldspaceUIContainer == _managementWorldspaceUiContainer)
+        if (UnityLife.IsAlive(_property) &&
+            _property!.WorldspaceUIContainer == _managementWorldspaceUiContainer)
         {
             _property.WorldspaceUIContainer = null;
         }
 
-        if (_managementWorldspaceUiContainer is not null)
-            UnityEngine.Object.DestroyImmediate(_managementWorldspaceUiContainer.gameObject);
+        if (UnityLife.IsAlive(_managementWorldspaceUiContainer))
+            UnityEngine.Object.DestroyImmediate(_managementWorldspaceUiContainer!.gameObject);
         _managementWorldspaceUiContainer = null;
     }
 
@@ -845,6 +1208,17 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
             FailureReason: failureReason);
     }
 
+    public void AbandonAfterSceneUnload()
+    {
+        // OC-108: after quit-to-menu the previous scene's objects are already destroyed,
+        // so a partial restore (e.g. frontage clearance) has nothing left to retry.
+        LogWarning("Fish Warehouse runtime from the unloaded scene was abandoned; the next load starts clean.");
+        _frontageClearance = null;
+        _frontageClearanceCleanupPending = false;
+        _continuousNavigationCoordinator = null;
+        Clear();
+    }
+
     private void Clear()
     {
         if (_continuousNavigationCoordinator is not null && !_continuousNavigationCoordinator.Stop())
@@ -870,6 +1244,8 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         _anchor = null;
         _buildSurface = null;
         _interiorRoom = null;
+        _lighting = null;
+        _garageJambs = null;
         _garageOpening = null;
         _navigation = null;
         _continuousNavigationCoordinator = null;
@@ -900,7 +1276,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
 
         public bool TryPreflightGeometry()
         {
-            if (!IsAlive(_host._anchor) || !IsAlive(_host._property))
+            if (!UnityLife.IsAlive(_host._anchor) || !UnityLife.IsAlive(_host._property))
                 return false;
 
             _host._garageOpening ??= new FishWarehouseGarageOpeningHost();
@@ -920,16 +1296,22 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         public bool TryActivateRoom()
         {
             FishWarehouseGarageOpeningProjection? projection = _host._garageOpening?.Preflight?.Projection;
-            if (!IsAlive(_host._anchor) || !IsAlive(_host._property) || projection is null)
+            if (!UnityLife.IsAlive(_host._anchor) || !UnityLife.IsAlive(_host._property) || projection is null)
                 return false;
 
             _host._interiorRoom ??= new FishWarehouseInteriorRoomHost();
-            return _host._interiorRoom.TryPrepare(
+            var roomReady = _host._interiorRoom.TryPrepare(
                        _host._anchor!,
                        _host._property!.transform,
                        projection,
                        Log) &&
                    _host._interiorRoom.Activate();
+            if (roomReady)
+            {
+                _host.TryActivateLighting();
+                _host.TryActivateGarageJambs(projection);
+            }
+            return roomReady;
         }
 
         public bool TryOpenGarage() => _host._garageOpening?.TryOpen(Log) == true;
@@ -953,14 +1335,19 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
             FishWarehouseGarageOpeningProjection? projection = _host._garageOpening?.Preflight?.Projection;
             Transform? locker = _host._buildSurface?.CurrentEmployeeHome?.transform;
             PackagingStation? packagingStation = _host.FindRepresentativePackagingStation();
-            Transform[]? idlePoints = _host._property?.EmployeeIdlePoints;
-            if (!IsAlive(_host._anchor))
+            // OC-117: navigation probes all 20 created points from tier 1
+            // on, not the tier-length slice the Property was handed, so a
+            // bad point fails early instead of at the tier that reveals it.
+            Transform[]? idlePoints = _host._employeeInfrastructure?.IsReady == true
+                ? _host._employeeInfrastructure.CreatedIdlePoints.ToArray()
+                : null;
+            if (!UnityLife.IsAlive(_host._anchor))
             {
                 LogWarning("Fish Warehouse employee navigation build rejected: anchor was unavailable.");
                 return FishWarehouseNativeNavigationBuildResult.Failed;
             }
 
-            if (!IsAlive(_host._property))
+            if (!UnityLife.IsAlive(_host._property))
             {
                 LogWarning("Fish Warehouse employee navigation build rejected: property root was unavailable.");
                 return FishWarehouseNativeNavigationBuildResult.Failed;
@@ -972,7 +1359,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
                 return FishWarehouseNativeNavigationBuildResult.Failed;
             }
 
-            int expectedCount = FishWarehouseEmployeeInfrastructureDefinition.Capacity;
+            int expectedCount = FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount;
             if (idlePoints is null)
             {
                 LogWarning($"Fish Warehouse employee navigation build rejected missing-idle-points: expected={expectedCount} actual=0.");
@@ -988,7 +1375,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
                 return FishWarehouseNativeNavigationBuildResult.Failed;
             }
 
-            if (idlePoints.Any(point => !IsAlive(point)))
+            if (idlePoints.Any(point => !UnityLife.IsAlive(point)))
             {
                 LogWarning($"Fish Warehouse employee navigation build rejected malformed-idle-points: expected={expectedCount} valid live points.");
                 return FishWarehouseNativeNavigationBuildResult.Failed;
@@ -1040,6 +1427,10 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         {
             try
             {
+                _host._lighting?.Dispose();
+                _host._lighting = null;
+                _host._garageJambs?.Dispose();
+                _host._garageJambs = null;
                 _host._interiorRoom?.Dispose();
             }
             catch (Exception ex)
@@ -1048,6 +1439,8 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
             }
             finally
             {
+                _host._lighting = null;
+                _host._garageJambs = null;
                 _host._interiorRoom = null;
             }
         }
@@ -1056,18 +1449,18 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
     private PackagingStation? FindRepresentativePackagingStation()
     {
         var property = _property;
-        if (!IsAlive(property))
+        if (!UnityLife.IsAlive(property))
             return null;
 
         try
         {
             foreach (PackagingStation station in Resources.FindObjectsOfTypeAll<PackagingStation>())
             {
-                if (!IsAlive(station))
+                if (!UnityLife.IsAlive(station))
                     continue;
 
                 BuildableItem? buildable = station.GetComponent<BuildableItem>();
-                if (IsAlive(buildable) && buildable!.ParentProperty == property)
+                if (UnityLife.IsAlive(buildable) && buildable!.ParentProperty == property)
                     return station;
             }
         }
@@ -1155,23 +1548,11 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         return string.Join("/", names);
     }
 
-    private static void Log(string message) => MelonLoader.MelonLogger.Msg($"[Organized Crime] {message}");
-    private static void LogWarning(string message) => MelonLoader.MelonLogger.Warning($"[Organized Crime] {message}");
-    private static bool IsAlive(UnityEngine.Object? value)
-    {
-        try
-        {
-            return value is not null && value != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
+    internal static void Log(string message) => OrganizedCrimeLog.Receipt(message);
+    private static void LogWarning(string message) => OrganizedCrimeLog.Warning(message);
     private static int GetNativeInstanceId(UnityEngine.Object? value)
     {
-        if (!IsAlive(value))
+        if (!UnityLife.IsAlive(value))
             return 0;
 
         try
@@ -1189,7 +1570,7 @@ public sealed class RuntimePropertyHost : IRuntimePropertyHost
         try
         {
             var value = read();
-            if (!IsAlive(value))
+            if (!UnityLife.IsAlive(value))
                 return "<none>";
 
             return value!.GetInstanceID().ToString();

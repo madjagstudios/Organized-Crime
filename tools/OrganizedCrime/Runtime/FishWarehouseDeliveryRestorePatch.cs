@@ -2,6 +2,7 @@ using HarmonyLib;
 using Il2CppScheduleOne.Delivery;
 using Il2CppScheduleOne.UI.Phone.Delivery;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 
 namespace OrganizedCrime.Runtime;
 
@@ -28,6 +29,7 @@ internal static class FishWarehouseDeliveryRestorePatch
 
     private static readonly FishWarehouseDeliveryRestoreGate<PendingDeliveryPayload> Gate =
         new(FishWarehouseLoadingDockDefinition.TargetPropertyCode);
+    internal static Func<bool> IsHost { get; set; } = FishNetHostGate.IsHostNow;
     private static Func<bool> _isReady = () => false;
     private static Action<string> _log = _ => { };
     private static bool _replaying;
@@ -70,6 +72,9 @@ internal static class FishWarehouseDeliveryRestorePatch
 
     private static bool DispatchPrefix(DeliveryManager __instance, DeliveryInstance __0)
     {
+        if (!IsHost())
+            return true;
+
         if (_replaying || __0 is null)
             return true;
 
@@ -82,6 +87,9 @@ internal static class FishWarehouseDeliveryRestorePatch
 
     private static bool StatusPrefix(DeliveryInstance __instance, EDeliveryStatus __0)
     {
+        if (!IsHost())
+            return true;
+
         if (_replaying || __instance is null)
             return true;
 
@@ -94,6 +102,9 @@ internal static class FishWarehouseDeliveryRestorePatch
 
     private static bool StatusDisplayPrefix(DeliveryApp __instance, DeliveryInstance __0)
     {
+        if (!IsHost())
+            return true;
+
         if (__0 is null)
             return true;
 
@@ -208,7 +219,7 @@ internal static class FishWarehouseDeliveryRestorePatch
                 var dispatch = (PendingDispatch)pending.Delivery;
                 dispatch.Manager.SendDelivery(dispatch.Delivery);
                 Gate.MarkReplayed(pending.DeliveryId, pending.ActionKind);
-                _log($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=Dispatch).");
+                OrganizedCrimeLog.Diagnostic($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=Dispatch).", _log);
                 break;
             }
             case FishWarehouseDeliveryActionKind.Status:
@@ -227,7 +238,7 @@ internal static class FishWarehouseDeliveryRestorePatch
                     if (_nestedStatusDisplayObserved)
                     {
                         Gate.MarkReplayed(pending.DeliveryId, FishWarehouseDeliveryActionKind.StatusDisplay);
-                        _log($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=StatusDisplay, mode=nested).");
+                        OrganizedCrimeLog.Diagnostic($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=StatusDisplay, mode=nested).", _log);
                     }
                     else
                     {
@@ -235,7 +246,7 @@ internal static class FishWarehouseDeliveryRestorePatch
                     }
                 }
 
-                _log($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=Status).");
+                OrganizedCrimeLog.Diagnostic($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=Status).", _log);
                 break;
             }
             case FishWarehouseDeliveryActionKind.StatusDisplay:
@@ -251,7 +262,7 @@ internal static class FishWarehouseDeliveryRestorePatch
         var display = (PendingStatusDisplay)pending.Delivery;
         display.App.CreateDeliveryStatusDisplay(display.Delivery);
         Gate.MarkReplayed(pending.DeliveryId, pending.ActionKind);
-        _log($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=StatusDisplay, mode=explicit).");
+        OrganizedCrimeLog.Diagnostic($"Fish Warehouse delivery action replayed (delivery={pending.DeliveryId}, action=StatusDisplay, mode=explicit).", _log);
     }
 
     internal static FishWarehouseDeliveryRestoreFlushResult StoreFlushResult(
@@ -267,6 +278,7 @@ internal static class FishWarehouseDeliveryRestorePatch
     public static void Reset()
     {
         Gate.Reset();
+        IsHost = FishNetHostGate.IsHostNow;
         _isReady = () => false;
         _log = _ => { };
         _replaying = false;

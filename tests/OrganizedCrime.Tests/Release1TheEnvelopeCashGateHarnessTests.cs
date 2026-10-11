@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using OrganizedCrime.Model;
 using OrganizedCrime.Runtime;
 using Xunit;
@@ -161,7 +162,7 @@ public sealed class Release1TheEnvelopeCashGateHarnessTests
         Assert.Equal(Release1StagingHarnessStatus.Succeeded, result.Status);
     }
 
-    private sealed class FakeWorld : IRelease1SmallCourtesyWorld
+    private sealed class FakeWorld : IDeadDropCashWorld
     {
         public IReadOnlyList<Release1SmallCourtesyDropCandidate> Drops { get; set; } =
             Array.Empty<Release1SmallCourtesyDropCandidate>();
@@ -171,18 +172,6 @@ public sealed class Release1TheEnvelopeCashGateHarnessTests
         public Func<string, int, float, float>? BalanceAfterDecrement { get; set; }
         public List<(string Guid, int SlotIndex, bool Locked)> LockCalls { get; } = new();
         public List<(string Guid, int SlotIndex, float Amount)> CashChangeCalls { get; } = new();
-
-        public Release1SmallCourtesyWorldReadStatus TryReadContext(out Release1StoryHostContextSnapshot context)
-        {
-            context = default;
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldReadStatus TryReadCanonicalTotalMinutes(out double totalMinutes)
-        {
-            totalMinutes = 0d;
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
 
         public Release1SmallCourtesyWorldReadStatus TryReadProducts(out IReadOnlyList<Release1SmallCourtesyProductCandidate> products)
         {
@@ -215,12 +204,6 @@ public sealed class Release1TheEnvelopeCashGateHarnessTests
             return Release1SmallCourtesyWorldReadStatus.Unavailable;
         }
 
-        public Release1SmallCourtesyWorldReadStatus TryReadHoldRoom(out Release1HoldRoomSnapshot room)
-        {
-            room = Release1HoldRoomSnapshot.Unavailable();
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-
         public Release1SmallCourtesyWorldMutationStatus TrySetSlotLocked(string deadDropGuid, int slotIndex, bool locked)
         {
             LockCalls.Add((deadDropGuid, slotIndex, locked));
@@ -245,30 +228,6 @@ public sealed class Release1TheEnvelopeCashGateHarnessTests
             return Release1SmallCourtesyWorldReadStatus.Unavailable;
         }
 
-        public Release1SmallCourtesyWorldReadStatus TryReadCashBalance(out float balance)
-        {
-            balance = 0f;
-            return Release1SmallCourtesyWorldReadStatus.Ready;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryChangeCashBalance(float amount) =>
-            Release1SmallCourtesyWorldMutationStatus.Unavailable;
-
-        public Release1SmallCourtesyWorldMutationStatus TryDebitCashBalance(float amount) =>
-            Release1SmallCourtesyWorldMutationStatus.Unavailable;
-
-        public Release1SmallCourtesyWorldMutationStatus TryEngageLockdown(out string reason)
-        {
-            reason = string.Empty;
-            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TryReleaseLockdown(out string reason)
-        {
-            reason = string.Empty;
-            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
-        }
-
         public Release1SmallCourtesyWorldReadStatus TryReadDeadDropSlotCashBalance(string deadDropGuid, int slotIndex, out float balance)
         {
             balance = CashBalances.TryGetValue((deadDropGuid, slotIndex), out var value) ? value : 0f;
@@ -288,35 +247,5 @@ public sealed class Release1TheEnvelopeCashGateHarnessTests
             return Release1SmallCourtesyWorldMutationStatus.Succeeded;
         }
 
-        public Release1SmallCourtesyWorldReadStatus TryReadHoldRoomSlotCashBalance(string closetGuid, int slotIndex, out float balance)
-        {
-            balance = 0f;
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-
-        public Release1SmallCourtesyWorldMutationStatus TrySetHoldRoomSlotLocked(string closetGuid, int slotIndex, bool locked) =>
-            Release1SmallCourtesyWorldMutationStatus.Rejected;
-
-        public Release1SmallCourtesyWorldMutationStatus TryChangeHoldRoomSlotCashBalance(string closetGuid, int slotIndex, float amount) =>
-            Release1SmallCourtesyWorldMutationStatus.Rejected;
-
-        // The mission under test never reads production activity.
-        public Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity)
-        {
-            activity = Release1ProductionActivitySnapshot.Empty;
-            return Release1SmallCourtesyWorldReadStatus.Unavailable;
-        }
-        public Release1SmallCourtesyWorldReadStatus TryReadFieldContact(string contactId, out Release1FieldContactSnapshot snapshot)
-        { snapshot = Release1FieldContactSnapshot.Unavailable(); return Release1SmallCourtesyWorldReadStatus.Unavailable; }
-
-        public Release1SmallCourtesyWorldMutationStatus TryDespawnFieldContact(string contactId, out string reason)
-        { reason = "this fake never despawns a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-
-        public Release1SmallCourtesyWorldMutationStatus TryProvokeFieldContact(string contactId, out string reason)
-        { reason = "this fake never provokes a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-        public Release1SmallCourtesyWorldMutationStatus TryParkFieldContact(string contactId, out string reason)
-        { reason = "this fake never parks a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
-        public Release1SmallCourtesyWorldMutationStatus TryUnparkFieldContact(string contactId, float aheadMetres, out string reason)
-        { reason = "this fake never unparks a field contact."; return Release1SmallCourtesyWorldMutationStatus.Rejected; }
     }
 }

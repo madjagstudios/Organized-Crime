@@ -24,7 +24,7 @@ public sealed class LocalPressurePersistenceTests
     [Fact]
     public void One_and_multiple_players_round_trip_every_supported_value()
     {
-        var original = new LocalPressureSaveEnvelope(1, new[]
+        var original = new LocalPressureSaveEnvelope(2, new[]
         {
             new LocalPressurePlayerRecord("player-1", 42, true, 100.0, 102.0, 101.0, "north", "safehouse", 7),
             new LocalPressurePlayerRecord("player-2", 0, false, null, null, null, null, null, 0)
@@ -40,7 +40,7 @@ public sealed class LocalPressurePersistenceTests
     [Fact]
     public void Serialization_orders_players_by_ordinal_player_id_and_fields_stably()
     {
-        var envelope = new LocalPressureSaveEnvelope(1, new[]
+        var envelope = new LocalPressureSaveEnvelope(2, new[]
         {
             DefaultRecord("zeta"),
             DefaultRecord("Alpha"),
@@ -72,7 +72,7 @@ public sealed class LocalPressurePersistenceTests
     [InlineData(" ")]
     public void Blank_player_ids_are_rejected(string playerId)
     {
-        var json = SerializeWithoutValidation(new LocalPressureSaveEnvelope(1, new[] { DefaultRecord(playerId) }));
+        var json = SerializeWithoutValidation(new LocalPressureSaveEnvelope(2, new[] { DefaultRecord(playerId) }));
 
         AssertCodecRejects(json, LocalPressureCodecFailureReason.InvalidPlayerId);
     }
@@ -157,7 +157,7 @@ public sealed class LocalPressurePersistenceTests
     public void Optional_context_round_trips_and_is_bounded()
     {
         var record = DefaultRecord("player") with { Region = "district-1", Property = "safehouse-1" };
-        var decoded = Deserialize(new LocalPressureSaveEnvelope(1, new[] { record })).Players.Single();
+        var decoded = Deserialize(new LocalPressureSaveEnvelope(2, new[] { record })).Players.Single();
 
         Assert.Equal("district-1", decoded.Region);
         Assert.Equal("safehouse-1", decoded.Property);
@@ -184,13 +184,13 @@ public sealed class LocalPressurePersistenceTests
     public void Codec_does_not_infer_known_offender_or_serialize_profile_tuning()
     {
         var record = DefaultRecord("player") with { KnownOffender = false };
-        var json = Serialize(new LocalPressureSaveEnvelope(1, new[] { record }));
+        var json = Serialize(new LocalPressureSaveEnvelope(2, new[] { record }));
 
         Assert.DoesNotContain("wanted", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("pursuit", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("arrest", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("quietGraceHours", json, StringComparison.Ordinal);
-        Assert.False(Deserialize(new LocalPressureSaveEnvelope(1, new[] { record })).Players.Single().KnownOffender);
+        Assert.False(Deserialize(new LocalPressureSaveEnvelope(2, new[] { record })).Players.Single().KnownOffender);
     }
 
     [Fact]
@@ -352,7 +352,7 @@ public sealed class LocalPressurePersistenceTests
         var store = CreateStore(temp.Path, fileSystem);
         var existing = DefaultRecord("player") with { Revision = 1 };
         Directory.CreateDirectory(store.SavePath.SidecarDirectory);
-        File.WriteAllText(store.SavePath.SidecarFilePath, Serialize(new LocalPressureSaveEnvelope(1, new[] { existing })));
+        File.WriteAllText(store.SavePath.SidecarFilePath, Serialize(new LocalPressureSaveEnvelope(2, new[] { existing })));
         var before = File.ReadAllBytes(store.SavePath.SidecarFilePath);
 
         Assert.False(store.TryUpdate(existing with { LocalHeat = 9, Revision = 2 }, out var result));

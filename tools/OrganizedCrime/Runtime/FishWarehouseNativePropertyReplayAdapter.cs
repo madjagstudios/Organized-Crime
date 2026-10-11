@@ -107,16 +107,25 @@ public sealed class FishWarehouseNativePropertyReplayAdapter : IFishWarehouseNat
             {
                 using var document = JsonDocument.Parse(data.BaseData);
                 var root = document.RootElement;
-                var guid = root.GetProperty("GUID").GetString();
+                if (!root.TryGetProperty("GUID", out var guidValue) || guidValue.ValueKind != JsonValueKind.String)
+                    throw new JsonException("GUID was missing.");
+
+                var guid = guidValue.GetString();
                 if (string.IsNullOrWhiteSpace(guid))
                     throw new JsonException("GUID was unavailable.");
+
+                if (!root.TryGetProperty("LoadOrder", out var loadOrderValue))
+                    throw new JsonException("LoadOrder was missing.");
+
+                if (!loadOrderValue.TryGetInt32(out var loadOrder))
+                    throw new JsonException("LoadOrder was invalid.");
 
                 var itemId = ReadItemId(root);
                 captured.Add(new FishWarehouseSavedObjectDescriptor(
                     index,
                     data.DataType,
                     guid,
-                    root.GetProperty("LoadOrder").GetInt32(),
+                    loadOrder,
                     string.Equals(data.DataType, "ProceduralGridItemData", StringComparison.Ordinal),
                     string.Equals(itemId, "locker", StringComparison.OrdinalIgnoreCase)));
             }

@@ -1,3 +1,4 @@
+using OrganizedCrime.Core.Diagnostics;
 using OrganizedCrime.Model;
 using S1API.Entities;
 using S1API.Messaging;
@@ -31,7 +32,7 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
 {
     private readonly Release1QuestPersistencePolicy _policy;
     private readonly Action<string> _log;
-    private readonly HashSet<string> _loggedMessages = new(StringComparer.Ordinal);
+    private readonly OnceLog _loggedMessages;
     private readonly string _contactId;
     private readonly Func<NPC> _createContact;
     private readonly Func<NPC, bool> _isContact;
@@ -44,8 +45,8 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
     private Release1ShortNoticeQuest? _shortNoticeQuest;
     private Release1KeepTheLightsOffQuest? _keepTheLightsOffQuest;
     private Release1TheEnvelopeQuest? _theEnvelopeQuest;
+    private Chapter3JobQuest? _jobQuest;
     private string? _decisionId;
-    private Action<Release1PresentationCommand>? _onChosen;
 
     public S1ApiRelease1NativePresentation(Release1QuestPersistencePolicy policy, Action<string>? log = null)
         : this(policy, Release1NativePresentationSupport.NellNpcId, () => new Release1NellNpc(), npc => npc is Release1NellNpc, log) { }
@@ -59,6 +60,7 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
         _createContact = createContact ?? throw new ArgumentNullException(nameof(createContact));
         _isContact = isContact ?? throw new ArgumentNullException(nameof(isContact));
         _log = log ?? (_ => { });
+        _loggedMessages = new OnceLog(_log);
     }
 
     public Release1NativePresentationStatus TryEnsureContact()
@@ -94,6 +96,7 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
         }
     }
 
+
     public Release1NativePresentationStatus TryReadSentMessages(out IReadOnlyList<string> texts)
     {
         texts = Array.Empty<string>();
@@ -102,7 +105,8 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
         {
             var conversation = ResolveConversation(_contact);
             if (conversation == null) return Release1NativePresentationStatus.Unavailable;
-            var history = conversation.messageHistory;
+            // 0.4.7 made the field private (_messageHistory); S1API offers no public read.
+            var history = conversation._messageHistory;
             if (history == null) return Release1NativePresentationStatus.Unavailable;
 
             var raw = new List<string?>();
@@ -158,9 +162,7 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
     }
 
     /// <summary>
-    /// Binds the desired options to a label-&gt;command map, then either binds the callback onto
-    /// existing native responses (when their labels already match, in order, so nothing is sent) or
-    /// sends the prompt with fresh responses through the single <c>SendTextMessage</c> call site.
+    /// Release 1 entry to the shared bind-or-send core below.
     /// </summary>
     public Release1NativePresentationStatus TrySetDecision(Release1DesiredDecision decision, Action<Release1PresentationCommand> onChosen)
     {
@@ -170,65 +172,97 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
             ArgumentNullException.ThrowIfNull(onChosen);
             if (_contact is null || _messaging is null) return Release1NativePresentationStatus.Unavailable;
 
-            var options = new Dictionary<string, Release1PresentationCommand>(StringComparer.Ordinal);
-            var desiredLabels = new List<string>();
+            var options = new List<Release1LabeledDecisionOption>();
             foreach (var option in decision.Options)
-            {
-                var label = Release1PlayerCopy.Normalize(option.Label);
-                options[label] = option.Command;
-                desiredLabels.Add(label);
-            }
-
-            var existingLabels = ReadNativeResponseLabels(_contact);
-            if (Release1NativePresentationSupport.ShouldBindExistingResponses(existingLabels, desiredLabels))
-            {
-                var availableLabels = new HashSet<string>(_messaging.LoadedResponses.Keys, StringComparer.Ordinal);
-                if (!Release1NativePresentationSupport.AllDesiredLabelsAvailable(desiredLabels, availableLabels))
-                {
-                    // At least one desired label has no restored Response to bind a callback onto.
-                    // Bind nothing and do not commit _decisionId/_onChosen: committing here would make
-                    // the next pass's "observed.Id is not null" check in the projector treat this
-                    // decision as already bound, when in fact no callback was ever attached, leaving
-                    // the prompt inert for the rest of the session. Returning non-Succeeded instead
-                    // lets the projector retry this same diff on its next reconcile pass.
-                    LogOnce("Release 1 native presentation could not find a restored response for every desired decision option; deferring the bind to a later reconcile pass.");
-                    return Release1NativePresentationStatus.Unavailable;
-                }
-
-                foreach (var label in desiredLabels)
-                {
-                    if (!Release1NativePresentationSupport.TryMatchRebindCommand(options, label, out var command)) continue;
-                    if (!_messaging.TryGetResponse(label, out var response) || response is null) continue;
-                    response.OnTriggered = () => InvokeChosen(command);
-                }
-            }
-            else
-            {
-                var responses = new List<Response>();
-                foreach (var label in desiredLabels)
-                {
-                    var command = options[label];
-                    responses.Add(new Response
-                    {
-                        Label = label,
-                        Text = label,
-                        OnTriggered = () => InvokeChosen(command)
-                    });
-                }
-
-                var status = SendNative(Release1PlayerCopy.Normalize(decision.Prompt), responses.ToArray());
-                if (status != Release1NativePresentationStatus.Succeeded) return status;
-            }
-
-            _decisionId = decision.Id;
-            _onChosen = onChosen;
-            return Release1NativePresentationStatus.Succeeded;
+                options.Add(new Release1LabeledDecisionOption(option.Label, () => onChosen(option.Command)));
+            return SetLabeledDecisionCore(_contact, _messaging, decision.Id, decision.Prompt, options);
         }
         catch (Exception exception)
         {
             LogOnce($"Release 1 native presentation set decision faulted: {exception.GetType().Name}");
             return Release1NativePresentationStatus.Faulted;
         }
+    }
+
+    /// <summary>
+    /// Chapter 3 entry to the same bind-or-send core: the options already carry
+    /// their own callbacks, since Chapter 3 commands carry payloads an enum cannot.
+    /// </summary>
+    public Release1NativePresentationStatus TrySetLabeledDecision(Release1LabeledDecision decision)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(decision);
+            if (_contact is null || _messaging is null) return Release1NativePresentationStatus.Unavailable;
+            return SetLabeledDecisionCore(_contact, _messaging, decision.Id, decision.Prompt, decision.Options);
+        }
+        catch (Exception exception)
+        {
+            LogOnce($"Release 1 native presentation set labeled decision faulted: {exception.GetType().Name}");
+            return Release1NativePresentationStatus.Faulted;
+        }
+    }
+
+    /// <summary>
+    /// Binds the desired options to a label-&gt;callback map, then either binds the callbacks onto
+    /// existing native responses (when their labels already match, in order, so nothing is sent) or
+    /// sends the prompt with fresh responses through the single <c>SendTextMessage</c> call site.
+    /// Throws to the caller, whose try block converts faults to status.
+    /// </summary>
+    private Release1NativePresentationStatus SetLabeledDecisionCore(
+        NPC contact, IRelease1MessagingNpc messaging, string id, string prompt, IReadOnlyList<Release1LabeledDecisionOption> options)
+    {
+        var choose = new Dictionary<string, Action>(StringComparer.Ordinal);
+        var desiredLabels = new List<string>();
+        foreach (var option in options)
+        {
+            var label = Release1PlayerCopy.Normalize(option.Label);
+            choose[label] = option.OnChosen;
+            desiredLabels.Add(label);
+        }
+
+        var existingLabels = ReadNativeResponseLabels(contact);
+        if (Release1NativePresentationSupport.ShouldBindExistingResponses(existingLabels, desiredLabels))
+        {
+            var availableLabels = new HashSet<string>(messaging.LoadedResponses.Keys, StringComparer.Ordinal);
+            if (!Release1NativePresentationSupport.AllDesiredLabelsAvailable(desiredLabels, availableLabels))
+            {
+                // At least one desired label has no restored Response to bind a callback onto.
+                // Bind nothing and do not commit _decisionId: committing here would make
+                // the next pass's "observed.Id is not null" check in the projector treat this
+                // decision as already bound, when in fact no callback was ever attached, leaving
+                // the prompt inert for the rest of the session. Returning non-Succeeded instead
+                // lets the projector retry this same diff on its next reconcile pass.
+                LogOnce("Release 1 native presentation could not find a restored response for every desired decision option; deferring the bind to a later reconcile pass.");
+                return Release1NativePresentationStatus.Unavailable;
+            }
+
+            foreach (var label in desiredLabels)
+            {
+                if (!choose.TryGetValue(label, out var callback)) continue;
+                if (!messaging.TryGetResponse(label, out var response) || response is null) continue;
+                response.OnTriggered = callback;
+            }
+        }
+        else
+        {
+            var responses = new List<Response>();
+            foreach (var label in desiredLabels)
+            {
+                responses.Add(new Response
+                {
+                    Label = label,
+                    Text = label,
+                    OnTriggered = choose[label]
+                });
+            }
+
+            var status = SendNative(Release1PlayerCopy.Normalize(prompt), responses.ToArray());
+            if (status != Release1NativePresentationStatus.Succeeded) return status;
+        }
+
+        _decisionId = id;
+        return Release1NativePresentationStatus.Succeeded;
     }
 
     public Release1NativePresentationStatus TryClearDecision()
@@ -239,7 +273,6 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
             if (status == Release1NativePresentationStatus.Succeeded)
             {
                 _decisionId = null;
-                _onChosen = null;
             }
             return status;
         }
@@ -295,6 +328,13 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
                 case Release1MissionCatalog.TheEnvelope:
                 {
                     if (!TryResolveTheEnvelopeQuest(out var found)) return Release1NativePresentationStatus.Faulted;
+                    if (found is null) return Release1NativePresentationStatus.Succeeded;
+                    quest = new Release1ObservedQuest(key, found.ReadEntryStates());
+                    return Release1NativePresentationStatus.Succeeded;
+                }
+                case Chapter3QuestCopy.QuestKey:
+                {
+                    if (!TryResolveJobQuest(out var found)) return Release1NativePresentationStatus.Faulted;
                     if (found is null) return Release1NativePresentationStatus.Succeeded;
                     quest = new Release1ObservedQuest(key, found.ReadEntryStates());
                     return Release1NativePresentationStatus.Succeeded;
@@ -371,6 +411,25 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
                     native.Project(quest);
                     return Release1NativePresentationStatus.Succeeded;
                 }
+                case Chapter3QuestCopy.QuestKey:
+                {
+                    if (!TryResolveJobQuest(out var native)) return Release1NativePresentationStatus.Faulted;
+                    if (native is not null && native.EntryCount != quest.Entries.Count)
+                    {
+                        // A re-adopted quest from the other job type: S1API has
+                        // no entry removal, so end it and create a fresh one at
+                        // the desired width. End unregisters the quest, so the
+                        // fresh create cannot collide with it.
+                        native.End();
+                        _jobQuest = null;
+                        native = null;
+                    }
+                    native ??= CreateQuest<Chapter3JobQuest>();
+                    if (native is null) return Release1NativePresentationStatus.Unavailable;
+                    _jobQuest = native;
+                    native.Project(quest);
+                    return Release1NativePresentationStatus.Succeeded;
+                }
                 default:
                     return Release1NativePresentationStatus.Rejected;
             }
@@ -436,6 +495,14 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
                     _theEnvelopeQuest = null;
                     return Release1NativePresentationStatus.Succeeded;
                 }
+                case Chapter3QuestCopy.QuestKey:
+                {
+                    if (!TryResolveJobQuest(out var native)) return Release1NativePresentationStatus.Faulted;
+                    if (native is null) return Release1NativePresentationStatus.Succeeded;
+                    native.End();
+                    _jobQuest = null;
+                    return Release1NativePresentationStatus.Succeeded;
+                }
                 default:
                     return Release1NativePresentationStatus.Succeeded;
             }
@@ -463,8 +530,8 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
         _shortNoticeQuest = null;
         _keepTheLightsOffQuest = null;
         _theEnvelopeQuest = null;
+        _jobQuest = null;
         _decisionId = null;
-        _onChosen = null;
     }
 
     public void OnSaveStart()
@@ -479,6 +546,7 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
                 TryEndQuest(Release1MissionCatalog.ShortNotice);
                 TryEndQuest(Release1MissionCatalog.KeepTheLightsOff);
                 TryEndQuest(Release1MissionCatalog.TheEnvelope);
+                TryEndQuest(Chapter3QuestCopy.QuestKey);
             }
         }
         catch (Exception exception)
@@ -486,8 +554,6 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
             LogOnce($"Release 1 native presentation OnSaveStart faulted: {exception.GetType().Name}");
         }
     }
-
-    private void InvokeChosen(Release1PresentationCommand command) => _onChosen?.Invoke(command);
 
     private Release1NativePresentationStatus SendNative(string text, Response[]? responses)
     {
@@ -555,6 +621,14 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
     {
         var ok = TryResolveQuest(ref _theEnvelopeQuest, Release1TheEnvelopeQuest.DisplayTitle);
         quest = _theEnvelopeQuest;
+        return ok;
+    }
+
+    /// <summary>Resolves the tracked Chapter 3 job quest; mirrors <see cref="TryResolveSmallCourtesyQuest"/> exactly.</summary>
+    private bool TryResolveJobQuest(out Chapter3JobQuest? quest)
+    {
+        var ok = TryResolveQuest(ref _jobQuest, Chapter3QuestCopy.QuestTitle);
+        quest = _jobQuest;
         return ok;
     }
 
@@ -635,7 +709,7 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
     {
         var conversation = ResolveConversation(contact);
         if (conversation == null) return null;
-        var history = conversation.messageHistory;
+        var history = conversation._messageHistory;
         if (history == null) return null;
 
         string? mostRecent = null;
@@ -658,7 +732,6 @@ public sealed class S1ApiRelease1NativePresentation : IRelease1NativePresentatio
 
     private void LogOnce(string message)
     {
-        if (!_loggedMessages.Add(message)) return;
-        _log(message);
+        _loggedMessages.Report(message, message);
     }
 }

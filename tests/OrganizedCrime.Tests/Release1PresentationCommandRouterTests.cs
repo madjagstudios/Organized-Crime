@@ -558,7 +558,7 @@ public sealed class Release1PresentationCommandRouterTests
             var banner = new Release1PayphoneBanner(() => 0f);
             var phoneService = new Release1PhoneCallService(story, queue, banner);
             var publisher = new Release1TransitionPublisherService(new ReaderFake(context.Snapshot), story, phoneService);
-            var world = new Release1SmallCourtesyDepositTests.FakeWorld(context.Snapshot);
+            var world = new Release1SmallCourtesyDepositTests.ProductionFakeWorld(context.Snapshot);
             var service = new Release1SmallCourtesyMissionService(story, world);
             var presenter = new Release1SmallCourtesyPresenter(service, story);
             return new Harness(story, publisher, phoneService, service, presenter, queue);

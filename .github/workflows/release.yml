@@ -1,6 +1,6 @@
 name: Publish release
 
-# Fires when you publish a GitHub Release (tag like v1.0.1) with the locally-built
+# Fires when you publish a GitHub Release (tag like v2.0.0) with the locally-built
 # MadJagStudios-OrganizedCrime-<version>.zip attached as an asset. The mod cannot be
 # built on CI — its project references your local Schedule I install for the game
 # assemblies — so the attached zip (from packaging/build-package.ps1) is the source of

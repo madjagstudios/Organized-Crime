@@ -31,6 +31,8 @@ public sealed class FishWarehousePersistenceService
         _replayLifecycle = replayLifecycle ?? new FishWarehouseReplayLifecycle();
     }
 
+    internal Action<string>? DiagnosticLog { get; set; }
+
     public FishWarehouseSaveState? CurrentState => _currentState;
 
     public bool PrimeStateForLoad()
@@ -82,7 +84,7 @@ public sealed class FishWarehousePersistenceService
             state = ReconcileOwnership(state);
             _currentState = state;
             _applyState(state);
-            _log("Fish Warehouse save state loaded; owned-state restoration is queued after runtime readiness.");
+            (DiagnosticLog ?? _log)("Fish Warehouse save state loaded; owned-state restoration is queued after runtime readiness.");
             return true;
         }
 
@@ -101,13 +103,10 @@ public sealed class FishWarehousePersistenceService
 
         if (RequiresSnapshotProtection)
         {
-            if (TryRestoreProtectedNativeProperty(saveFolder, out var restoreFailure))
-            {
-                _log("WARNING: Fish Warehouse native property snapshot was restored to preserve the active replay; fresh runtime capture was skipped.");
-                return;
-            }
-
-            _log($"WARNING: Fish Warehouse native property snapshot preservation failed: {restoreFailure}");
+            // A blocked save must still restore the native property from the
+            // protected snapshot. The refresh below also repairs protection
+            // state the save wiped (OC-128 reload 2).
+            RefreshProtectedSnapshot(saveFolder);
             return;
         }
 
@@ -121,7 +120,7 @@ public sealed class FishWarehousePersistenceService
         if (_store.TryWrite(saveFolder, state, out var failureReason))
         {
             _currentState = state;
-            _log("Fish Warehouse save state written to the Organized Crime sidecar.");
+            (DiagnosticLog ?? _log)("Fish Warehouse save state written to the Organized Crime sidecar.");
             return;
         }
 
@@ -201,6 +200,18 @@ public sealed class FishWarehousePersistenceService
             merged[record.Guid] = record;
 
         return TryPersistState(MergeCurrentState() with { UnsupportedEmployees = merged.Values.ToArray() });
+    }
+
+    // Replaces the sidecar's preserved list with the replay result's list.
+    // Called only after a successful replay, where every record that did
+    // not replay is still present in the result — so replayed records leave
+    // the list while nothing that failed to replay is ever dropped.
+    public bool TryReplaceUnsupportedEmployees(IReadOnlyList<FishWarehouseUnsupportedEmployeeRecord> records)
+    {
+        if (records is null)
+            return false;
+
+        return TryPersistState(MergeCurrentState() with { UnsupportedEmployees = records.ToArray() });
     }
 
     private FishWarehouseSaveState MergeCurrentState() => _currentState ?? _captureState();
@@ -353,31 +364,63 @@ public sealed class FishWarehousePersistenceService
         }
     }
 
-    private bool TryRestoreProtectedNativeProperty(string saveFolder, out string? failureReason)
+    private void RefreshProtectedSnapshot(string saveFolder)
     {
         var replay = _replayLifecycle.CurrentCheckpoint ?? _currentState?.Replay;
-        if (replay is null)
+        if (replay is null ||
+            string.IsNullOrWhiteSpace(replay.SnapshotSha256) ||
+            string.IsNullOrWhiteSpace(replay.SnapshotRelativePath) ||
+            string.IsNullOrWhiteSpace(replay.SaveFolderKey))
         {
-            failureReason = "Fish Warehouse replay checkpoint was unavailable for snapshot preservation.";
-            return false;
+            _log("Fish Warehouse snapshot protection skipped: the active replay references no protected snapshot.");
+            return;
         }
 
-        if (!FishWarehouseSavePath.TryResolveSnapshotPath(saveFolder, out var snapshotPath, out failureReason))
-            return false;
-
-        if (!File.Exists(snapshotPath))
-        {
-            failureReason = "Fish Warehouse protected snapshot file was unavailable for preservation.";
-            return false;
-        }
-
-        var snapshot = new FishWarehouseProtectedSnapshot(
+        var descriptor = new FishWarehouseProtectedSnapshot(
             replay.GenerationId,
             replay.SaveFolderKey,
             replay.SnapshotRelativePath,
             replay.SnapshotSha256,
-            checked((int)new FileInfo(snapshotPath).Length));
-        return _snapshotStore.TryRestoreNativeProperty(saveFolder, snapshot, out failureReason);
+            0);
+        if (_snapshotStore.TryRead(saveFolder, descriptor, out var diskBytes, out _))
+        {
+            // The snapshot survived the save: restore the native property
+            // from disk and leave protection state untouched (no extra
+            // snapshot or sidecar writes).
+            var diskDescriptor = descriptor with { ByteCount = diskBytes.Length };
+            if (!_snapshotStore.TryRestoreNativeProperty(saveFolder, diskDescriptor, out var diskRestoreFailure))
+                _log($"WARNING: Fish Warehouse native property snapshot preservation failed: {diskRestoreFailure}");
+            else
+                _log("WARNING: Fish Warehouse native property snapshot was restored to preserve the active replay; fresh runtime capture was skipped.");
+            return;
+        }
+
+        // The disk snapshot is gone: the save dropped the save-folder files
+        // OC did not rewrite (OC-128 reload 2 took the sidecar with it), so
+        // refresh the snapshot from the retained in-memory bytes and rewrite
+        // the sidecar alongside it.
+        if (!_snapshotStore.TryReadRestorableBytes(saveFolder, descriptor, out var bytes, out var readFailure))
+        {
+            _log($"WARNING: Fish Warehouse native property snapshot preservation failed: {readFailure}");
+            return;
+        }
+
+        var restoreDescriptor = descriptor with { ByteCount = bytes.Length };
+        if (!_snapshotStore.TryProtect(saveFolder, replay.GenerationId, bytes, out _, out var refreshFailure))
+            _log($"WARNING: Fish Warehouse protected snapshot refresh failed: {refreshFailure}");
+        if (!_snapshotStore.TryRestoreNativeProperty(saveFolder, restoreDescriptor, out var restoreFailure))
+            _log($"WARNING: Fish Warehouse native property snapshot restore failed: {restoreFailure}");
+        else
+            _log("WARNING: Fish Warehouse native property snapshot was restored to preserve the active replay; fresh runtime capture was skipped.");
+        RewriteProtectionSidecar(saveFolder);
+    }
+
+    private void RewriteProtectionSidecar(string saveFolder)
+    {
+        var merged = MergeCurrentState();
+        var replay = _replayLifecycle.CurrentCheckpoint ?? merged.Replay;
+        if (TryPersistState(saveFolder, merged with { Replay = replay }))
+            _log("Fish Warehouse sidecar rewritten while snapshot protection is active.");
     }
 
     private static bool RequiresSnapshotProtectionFor(FishWarehouseReplayCheckpoint? replay) => replay is { Phase: >= FishWarehouseReplayPhase.Captured and <= FishWarehouseReplayPhase.DeliveriesReleased } ||

@@ -1,0 +1,509 @@
+{
+    "schemaVersion":  9,
+    "story":  {
+                  "playerId":  "76561190000000001",
+                  "standing":  60,
+                  "relationshipState":  "Accepted",
+                  "release1Recognized":  false,
+                  "introLogicalCorrelationIds":  [
+                                                     "oc10/v1/76561190000000001/release1.intro/0/IntroAccepted/story-prep-intro"
+                                                 ],
+                  "recognitionLogicalCorrelationIds":  [
+
+                                                       ],
+                  "missions":  [
+                                   {
+                                       "missionKey":  "release1.small-courtesy",
+                                       "state":  "Satisfied",
+                                       "attempt":  1,
+                                       "termsVersion":  "oc48-owner-qa-v1",
+                                       "acceptedGameTimeHours":  null,
+                                       "deadlineGameTimeHours":  null,
+                                       "lastOutcome":  "OnTime",
+                                       "standingPenaltyApplied":  0,
+                                       "penaltyReceiptIds":  [
+
+                                                             ],
+                                       "makeGoodFailures":  0,
+                                       "recoveryMode":  "None",
+                                       "rewardAuthorizationReceiptId":  "story-prep-1-reward",
+                                       "quietConditionAwarded":  false,
+                                       "nativeEffectIds":  [
+
+                                                           ],
+                                       "presentationCorrelationIds":  [
+
+                                                                      ],
+                                       "acceptedLogicalCorrelations":  [
+                                                                           "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionAccepted/story-prep-1-accepted",
+                                                                           "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionActivated/story-prep-1-activated",
+                                                                           "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionCompleted/story-prep-1-completed"
+                                                                       ],
+                                       "nativePresentationRef":  null,
+                                       "revision":  3
+                                   },
+                                   {
+                                       "missionKey":  "release1.wrong-address",
+                                       "state":  "Satisfied",
+                                       "attempt":  1,
+                                       "termsVersion":  "wrong-address-v1",
+                                       "acceptedGameTimeHours":  236.63333333333333,
+                                       "deadlineGameTimeHours":  260.6333333333333,
+                                       "lastOutcome":  "OnTime",
+                                       "standingPenaltyApplied":  0,
+                                       "penaltyReceiptIds":  [
+
+                                                             ],
+                                       "makeGoodFailures":  0,
+                                       "recoveryMode":  "None",
+                                       "rewardAuthorizationReceiptId":  "wrong-address-reward-auth-v1-a1",
+                                       "quietConditionAwarded":  false,
+                                       "nativeEffectIds":  [
+                                                               "wrong-address-cargo-v1-a1",
+                                                               "wrong-address-reward-v1-a1"
+                                                           ],
+                                       "presentationCorrelationIds":  [
+
+                                                                      ],
+                                       "acceptedLogicalCorrelations":  [
+                                                                           "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/wrong-address-primary-accept-v1-a1",
+                                                                           "oc10/v1/76561190000000001/release1.wrong-address/1/MissionActivated/wrong-address-activate-v1-a1",
+                                                                           "oc10/v1/76561190000000001/release1.wrong-address/1/MissionCompleted/wrong-address-complete-v1-a1"
+                                                                       ],
+                                       "nativePresentationRef":  null,
+                                       "revision":  5
+                                   },
+                                   {
+                                       "missionKey":  "release1.room-with-no-name",
+                                       "state":  "Satisfied",
+                                       "attempt":  1,
+                                       "termsVersion":  "room-with-no-name-v1",
+                                       "acceptedGameTimeHours":  248.75,
+                                       "deadlineGameTimeHours":  320.75,
+                                       "lastOutcome":  "OnTime",
+                                       "standingPenaltyApplied":  0,
+                                       "penaltyReceiptIds":  [
+
+                                                             ],
+                                       "makeGoodFailures":  0,
+                                       "recoveryMode":  "None",
+                                       "rewardAuthorizationReceiptId":  "room-with-no-name-reward-auth-v1-a1",
+                                       "quietConditionAwarded":  false,
+                                       "nativeEffectIds":  [
+                                                               "room-with-no-name-cargo-v1-a1",
+                                                               "room-with-no-name-reward-v1-a1"
+                                                           ],
+                                       "presentationCorrelationIds":  [
+
+                                                                      ],
+                                       "acceptedLogicalCorrelations":  [
+                                                                           "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionAccepted/room-with-no-name-primary-accept-v1-a1",
+                                                                           "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionActivated/room-with-no-name-activate-v1-a1",
+                                                                           "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionCompleted/room-with-no-name-complete-v1-a1"
+                                                                       ],
+                                       "nativePresentationRef":  null,
+                                       "revision":  5
+                                   },
+                                   {
+                                       "missionKey":  "release1.short-notice",
+                                       "state":  "Satisfied",
+                                       "attempt":  1,
+                                       "termsVersion":  "short-notice-v1",
+                                       "acceptedGameTimeHours":  275.18333333333334,
+                                       "deadlineGameTimeHours":  287.18333333333334,
+                                       "lastOutcome":  "OnTime",
+                                       "standingPenaltyApplied":  0,
+                                       "penaltyReceiptIds":  [
+
+                                                             ],
+                                       "makeGoodFailures":  0,
+                                       "recoveryMode":  "None",
+                                       "rewardAuthorizationReceiptId":  "short-notice-reward-auth-v1-a1",
+                                       "quietConditionAwarded":  false,
+                                       "nativeEffectIds":  [
+                                                               "short-notice-cargo-v1-a1",
+                                                               "short-notice-reward-v1-a1"
+                                                           ],
+                                       "presentationCorrelationIds":  [
+
+                                                                      ],
+                                       "acceptedLogicalCorrelations":  [
+                                                                           "oc10/v1/76561190000000001/release1.short-notice/1/MissionAccepted/short-notice-primary-accept-v1-a1",
+                                                                           "oc10/v1/76561190000000001/release1.short-notice/1/MissionActivated/short-notice-activate-v1-a1",
+                                                                           "oc10/v1/76561190000000001/release1.short-notice/1/MissionCompleted/short-notice-complete-v1-a1"
+                                                                       ],
+                                       "nativePresentationRef":  null,
+                                       "revision":  5
+                                   },
+                                   {
+                                       "missionKey":  "release1.keep-the-lights-off",
+                                       "state":  "Active",
+                                       "attempt":  1,
+                                       "termsVersion":  "keep-the-lights-off-v1",
+                                       "acceptedGameTimeHours":  295.65,
+                                       "deadlineGameTimeHours":  367.65,
+                                       "lastOutcome":  "None",
+                                       "standingPenaltyApplied":  0,
+                                       "penaltyReceiptIds":  [
+
+                                                             ],
+                                       "makeGoodFailures":  0,
+                                       "recoveryMode":  "None",
+                                       "rewardAuthorizationReceiptId":  null,
+                                       "quietConditionAwarded":  false,
+                                       "nativeEffectIds":  [
+
+                                                           ],
+                                       "presentationCorrelationIds":  [
+
+                                                                      ],
+                                       "acceptedLogicalCorrelations":  [
+                                                                           "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionAccepted/keep-the-lights-off-primary-accept-v1-a1",
+                                                                           "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionActivated/keep-the-lights-off-activate-v1-a1"
+                                                                       ],
+                                       "nativePresentationRef":  null,
+                                       "revision":  3
+                                   },
+                                   {
+                                       "missionKey":  "release1.the-envelope",
+                                       "state":  "Locked",
+                                       "attempt":  1,
+                                       "termsVersion":  null,
+                                       "acceptedGameTimeHours":  null,
+                                       "deadlineGameTimeHours":  null,
+                                       "lastOutcome":  "None",
+                                       "standingPenaltyApplied":  0,
+                                       "penaltyReceiptIds":  [
+
+                                                             ],
+                                       "makeGoodFailures":  0,
+                                       "recoveryMode":  "None",
+                                       "rewardAuthorizationReceiptId":  null,
+                                       "quietConditionAwarded":  false,
+                                       "nativeEffectIds":  [
+
+                                                           ],
+                                       "presentationCorrelationIds":  [
+
+                                                                      ],
+                                       "acceptedLogicalCorrelations":  [
+
+                                                                       ],
+                                       "nativePresentationRef":  null,
+                                       "revision":  0
+                                   }
+                               ],
+                  "nativeEffects":  [
+                                        {
+                                            "effectId":  "room-with-no-name-cargo-v1-a1",
+                                            "missionKey":  "release1.room-with-no-name",
+                                            "attempt":  1,
+                                            "effectKind":  "CargoTransfer",
+                                            "sourceIdentity":  "fde97bca-d21a-476c-bf03-b00768a45030",
+                                            "destinationIdentity":  "oc-room-with-no-name",
+                                            "amountOrCargoIdentity":  "sc-cargo-v1|testproduct2|brick|0|1|0|1440",
+                                            "phase":  "Committed",
+                                            "nativeReceiptId":  "room-with-no-name-cargo-native-v1-a1",
+                                            "preparedStoryRevision":  32,
+                                            "committedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionActivated/room-with-no-name-activate-v1-a1",
+                                            "authorizedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionActivated/room-with-no-name-activate-v1-a1",
+                                            "executionBlocked":  false,
+                                            "authorizedMissionRevision":  4
+                                        },
+                                        {
+                                            "effectId":  "room-with-no-name-reward-v1-a1",
+                                            "missionKey":  "release1.room-with-no-name",
+                                            "attempt":  1,
+                                            "effectKind":  "Reward",
+                                            "sourceIdentity":  "oc-room-with-no-name",
+                                            "destinationIdentity":  "player-cash",
+                                            "amountOrCargoIdentity":  "sc-reward-v1|100002600|2160|100004760|0.5",
+                                            "phase":  "Committed",
+                                            "nativeReceiptId":  "room-with-no-name-reward-native-v1-a1",
+                                            "preparedStoryRevision":  34,
+                                            "committedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionCompleted/room-with-no-name-complete-v1-a1",
+                                            "authorizedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionCompleted/room-with-no-name-complete-v1-a1",
+                                            "executionBlocked":  false,
+                                            "authorizedMissionRevision":  5
+                                        },
+                                        {
+                                            "effectId":  "short-notice-cargo-v1-a1",
+                                            "missionKey":  "release1.short-notice",
+                                            "attempt":  1,
+                                            "effectKind":  "CargoTransfer",
+                                            "sourceIdentity":  "fe1782b0-64e5-4ae6-a3f9-56af509af104",
+                                            "destinationIdentity":  "oc-short-notice",
+                                            "amountOrCargoIdentity":  "sc-cargo-v1|testproduct2|brick|1|3|0|4320",
+                                            "phase":  "Committed",
+                                            "nativeReceiptId":  "short-notice-cargo-native-v1-a1",
+                                            "preparedStoryRevision":  51,
+                                            "committedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionActivated/short-notice-activate-v1-a1",
+                                            "authorizedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionActivated/short-notice-activate-v1-a1",
+                                            "executionBlocked":  false,
+                                            "authorizedMissionRevision":  4
+                                        },
+                                        {
+                                            "effectId":  "short-notice-reward-v1-a1",
+                                            "missionKey":  "release1.short-notice",
+                                            "attempt":  1,
+                                            "effectKind":  "Reward",
+                                            "sourceIdentity":  "oc-short-notice",
+                                            "destinationIdentity":  "player-cash",
+                                            "amountOrCargoIdentity":  "sc-reward-v1|100004760|22680|100027440|0.5",
+                                            "phase":  "Committed",
+                                            "nativeReceiptId":  "short-notice-reward-native-v1-a1",
+                                            "preparedStoryRevision":  53,
+                                            "committedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionCompleted/short-notice-complete-v1-a1",
+                                            "authorizedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionCompleted/short-notice-complete-v1-a1",
+                                            "executionBlocked":  false,
+                                            "authorizedMissionRevision":  5
+                                        },
+                                        {
+                                            "effectId":  "wrong-address-cargo-v1-a1",
+                                            "missionKey":  "release1.wrong-address",
+                                            "attempt":  1,
+                                            "effectKind":  "CargoTransfer",
+                                            "sourceIdentity":  "683fa5b9-c55d-4b3f-8026-6f29857d09d1",
+                                            "destinationIdentity":  "oc-wrong-address",
+                                            "amountOrCargoIdentity":  "sc-cargo-v1|testproduct2|brick|0|1|0|1440",
+                                            "phase":  "Committed",
+                                            "nativeReceiptId":  "wrong-address-cargo-native-v1-a1",
+                                            "preparedStoryRevision":  12,
+                                            "committedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionActivated/wrong-address-activate-v1-a1",
+                                            "authorizedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionActivated/wrong-address-activate-v1-a1",
+                                            "executionBlocked":  false,
+                                            "authorizedMissionRevision":  4
+                                        },
+                                        {
+                                            "effectId":  "wrong-address-reward-v1-a1",
+                                            "missionKey":  "release1.wrong-address",
+                                            "attempt":  1,
+                                            "effectKind":  "Reward",
+                                            "sourceIdentity":  "oc-wrong-address",
+                                            "destinationIdentity":  "player-cash",
+                                            "amountOrCargoIdentity":  "sc-reward-v1|100000800|1800|100002600|0.5",
+                                            "phase":  "Committed",
+                                            "nativeReceiptId":  "wrong-address-reward-native-v1-a1",
+                                            "preparedStoryRevision":  14,
+                                            "committedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionCompleted/wrong-address-complete-v1-a1",
+                                            "authorizedStoryCorrelationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionCompleted/wrong-address-complete-v1-a1",
+                                            "executionBlocked":  false,
+                                            "authorizedMissionRevision":  5
+                                        }
+                                    ],
+                  "phonePresentationAttempts":  [
+                                                    {
+                                                        "correlationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/release1-phone-arthur-wa-clean-v1",
+                                                        "missionKey":  "release1.wrong-address",
+                                                        "attempt":  1,
+                                                        "role":  "Arthur",
+                                                        "requiredPriorCorrelationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/presentation-nell-wa-accepted-v1",
+                                                        "state":  "Delivered",
+                                                        "revision":  21
+                                                    }
+                                                ],
+                  "smallCourtesyAssignments":  [
+
+                                               ],
+                  "presentationReceipts":  [
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.intro/0/IntroAccepted/presentation-intro-accepted-v1",
+                                                   "revision":  5
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/presentation-nell-wa-accepted-v1",
+                                                   "revision":  9
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionActivated/presentation-nell-wa-custody-v1",
+                                                   "revision":  11
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionCompleted/presentation-nell-wa-delivered-v1",
+                                                   "revision":  16
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionAccepted/presentation-nell-rn-accepted-v1",
+                                                   "revision":  25
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionActivated/presentation-nell-rn-custody-v1",
+                                                   "revision":  27
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionActivated/presentation-nell-rn-stowed-v1",
+                                                   "revision":  29
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionActivated/presentation-nell-rn-release-v1",
+                                                   "revision":  31
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionCompleted/presentation-nell-rn-delivered-v1",
+                                                   "revision":  36
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionAccepted/presentation-nell-sn-accepted-v1",
+                                                   "revision":  41
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionActivated/presentation-nell-sn-shortfall-r2-v1",
+                                                   "revision":  43
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionActivated/presentation-nell-sn-shortfall-r1-v1",
+                                                   "revision":  45
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionActivated/presentation-nell-sn-spread-v1",
+                                                   "revision":  49
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionCompleted/presentation-nell-sn-delivered-v1",
+                                                   "revision":  55
+                                               },
+                                               {
+                                                   "correlationId":  "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionActivated/presentation-nell-ktlo-clear-v1",
+                                                   "revision":  61
+                                               }
+                                           ],
+                  "wrongAddressAssignments":  [
+                                                  {
+                                                      "missionKey":  "release1.wrong-address",
+                                                      "attempt":  1,
+                                                      "mode":  "Primary",
+                                                      "authorizationCorrelationId":  "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/wrong-address-primary-accept-v1-a1",
+                                                      "productId":  "testproduct2",
+                                                      "productName":  "TestProduct2",
+                                                      "packagingId":  "brick",
+                                                      "packagingName":  "Brick",
+                                                      "packageQuantity":  1,
+                                                      "sourceDropGuid":  "e5399b56-22a5-4a2c-a254-cc81e3ab2f75",
+                                                      "sourceDropName":  "Behind bank",
+                                                      "sourceDropDescription":  "behind the bank",
+                                                      "sourceDropX":  76.05561828613281,
+                                                      "sourceDropY":  0.9328043460845947,
+                                                      "sourceDropZ":  37.03160095214844,
+                                                      "handoffDropGuid":  "683fa5b9-c55d-4b3f-8026-6f29857d09d1",
+                                                      "handoffDropName":  "Behind medical practice",
+                                                      "handoffDropDescription":  "behind the medical practice",
+                                                      "handoffDropX":  98.43299865722656,
+                                                      "handoffDropY":  1.2510000467300415,
+                                                      "handoffDropZ":  71.0186996459961,
+                                                      "rewardMultiplier":  1.25
+                                                  }
+                                              ],
+                  "wrongAddressProgress":  [
+                                               {
+                                                   "missionKey":  "release1.wrong-address",
+                                                   "attempt":  1,
+                                                   "staged":  true,
+                                                   "custody":  true
+                                               }
+                                           ],
+                  "roomWithNoNameAssignments":  [
+                                                    {
+                                                        "missionKey":  "release1.room-with-no-name",
+                                                        "attempt":  1,
+                                                        "mode":  "Primary",
+                                                        "authorizationCorrelationId":  "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionAccepted/room-with-no-name-primary-accept-v1-a1",
+                                                        "productId":  "testproduct2",
+                                                        "productName":  "TestProduct2",
+                                                        "packagingId":  "brick",
+                                                        "packagingName":  "Brick",
+                                                        "packageQuantity":  1,
+                                                        "sourceDropGuid":  "e5399b56-22a5-4a2c-a254-cc81e3ab2f75",
+                                                        "sourceDropName":  "Behind bank",
+                                                        "sourceDropDescription":  "behind the bank",
+                                                        "sourceDropX":  76.05561828613281,
+                                                        "sourceDropY":  0.9328043460845947,
+                                                        "sourceDropZ":  37.03160095214844,
+                                                        "handoffDropGuid":  "fde97bca-d21a-476c-bf03-b00768a45030",
+                                                        "handoffDropName":  "Pawn shop west wall",
+                                                        "handoffDropDescription":  "on the pawn shop west wall",
+                                                        "handoffDropX":  -66.24620056152344,
+                                                        "handoffDropY":  0.9789999723434448,
+                                                        "handoffDropZ":  51.95399856567383,
+                                                        "holdRoomKey":  "syndicate-hq",
+                                                        "expectedClosetCount":  9,
+                                                        "holdDurationGameMinutes":  1440,
+                                                        "rewardMultiplier":  1.5
+                                                    }
+                                                ],
+                  "roomWithNoNameProgress":  [
+                                                 {
+                                                     "missionKey":  "release1.room-with-no-name",
+                                                     "attempt":  1,
+                                                     "staged":  true,
+                                                     "custody":  true,
+                                                     "stowed":  true,
+                                                     "holdSatisfied":  true,
+                                                     "stowedAtGameMinutes":  14875,
+                                                     "holdingClosetGuid":  "a92fc0f8-19fa-445c-9ef1-5af74904094d",
+                                                     "missingSincePassGameMinutes":  null
+                                                 }
+                                             ],
+                  "shortNoticeAssignments":  [
+                                                 {
+                                                     "missionKey":  "release1.short-notice",
+                                                     "attempt":  1,
+                                                     "mode":  "Primary",
+                                                     "authorizationCorrelationId":  "oc10/v1/76561190000000001/release1.short-notice/1/MissionAccepted/short-notice-primary-accept-v1-a1",
+                                                     "productId":  "testproduct2",
+                                                     "productName":  "TestProduct2",
+                                                     "packagingId":  "brick",
+                                                     "packagingName":  "Brick",
+                                                     "requiredQuantity":  3,
+                                                     "handoffDropGuid":  "fe1782b0-64e5-4ae6-a3f9-56af509af104",
+                                                     "handoffDropName":  "Behind the supermarket",
+                                                     "handoffDropDescription":  "behind the supermarket",
+                                                     "handoffDropX":  24.68600082397461,
+                                                     "handoffDropY":  1.2269999980926514,
+                                                     "handoffDropZ":  68.0177993774414,
+                                                     "deadlineGameMinutes":  720,
+                                                     "rewardMultiplier":  1.75,
+                                                     "valueConvention":  "PerUnit"
+                                                 }
+                                             ],
+                  "shortNoticeProgress":  [
+                                              {
+                                                  "missionKey":  "release1.short-notice",
+                                                  "attempt":  1,
+                                                  "observedQuantity":  3,
+                                                  "lastShortfallNoticed":  2,
+                                                  "spreadNoticed":  true
+                                              }
+                                          ],
+                  "keepTheLightsOffAssignments":  [
+                                                      {
+                                                          "missionKey":  "release1.keep-the-lights-off",
+                                                          "attempt":  1,
+                                                          "mode":  "Primary",
+                                                          "authorizationCorrelationId":  "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionAccepted/keep-the-lights-off-primary-accept-v1-a1",
+                                                          "productId":  "testproduct2",
+                                                          "productName":  "TestProduct2",
+                                                          "askingPrice":  72,
+                                                          "expectedDropCount":  25,
+                                                          "expectedClosetCount":  9,
+                                                          "windowDurationGameMinutes":  1440,
+                                                          "deadlineGameMinutes":  4320,
+                                                          "rewardMultiplier":  2
+                                                      }
+                                                  ],
+                  "keepTheLightsOffProgress":  [
+                                                   {
+                                                       "missionKey":  "release1.keep-the-lights-off",
+                                                       "attempt":  1,
+                                                       "clearConfirmedAtGameMinutes":  17700,
+                                                       "breachSincePassGameMinutes":  null
+                                                   }
+                                               ],
+                  "theEnvelopeAssignments":  [
+
+                                             ],
+                  "theEnvelopeProgress":  [
+
+                                          ],
+                  "revision":  99
+              }
+}

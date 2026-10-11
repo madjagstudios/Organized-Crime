@@ -1,14 +1,19 @@
 using OrganizedCrime.Runtime;
+using OrganizedCrime.Runtime.Composition;
 using Xunit;
 
 namespace OrganizedCrime.Tests;
 
+[Collection("OC-151 composition scope")]
 public sealed class SyndicateHqStorageCompositionTests
 {
     private static readonly string PatchSource = ReadSource("Runtime", "SyndicateHqStorageLoadPatch.cs");
     private static readonly string InteriorSource = ReadSource("Runtime", "SyndicateHqInteriorRuntime.cs");
     private static readonly string BoundarySource = ReadSource("Runtime", "SyndicateHqNativeStorageBoundary.cs");
-    private static readonly string ModSource = ReadSource("Mod.cs");
+    private static readonly string FanoutSource = ReadSource("Runtime", "Composition", "LifecycleFanout.cs");
+    private static readonly string HqModuleSource = ReadSource("Runtime", "Composition", "HqModule.cs");
+    private static readonly string MelonSource = ReadSource("Runtime", "Composition", "MelonEngineAdapters.cs");
+    private static readonly string RootSource = ReadSource("Runtime", "Composition", "OcCompositionRoot.cs");
 
     [Fact]
     public void Load_path_resolver_finds_the_exact_save_root_from_a_nested_native_path()
@@ -41,8 +46,10 @@ public sealed class SyndicateHqStorageCompositionTests
         Assert.DoesNotContain("postfix: new HarmonyMethod", PatchSource, StringComparison.Ordinal);
         Assert.Contains("PrepareAtVanillaLoadBoundary", PatchSource, StringComparison.Ordinal);
         Assert.Contains("CompleteVanillaLoadBoundary", PatchSource, StringComparison.Ordinal);
-        Assert.Contains("SyndicateHqStorageLoadPatch.BeginLoadCycle()", ModSource, StringComparison.Ordinal);
-        Assert.Contains("SyndicateHqStorageLoadPatch.CompleteAfterVanillaLoad()", ModSource, StringComparison.Ordinal);
+        Assert.Contains("\"pre-load/hq-storage-cycle\", engine.BeginHqLoadCycle", FanoutSource, StringComparison.Ordinal);
+        Assert.Contains("\"load-complete/hq-storage\", engine.CompleteHqLoad", FanoutSource, StringComparison.Ordinal);
+        Assert.Contains("SyndicateHqStorageLoadPatch.BeginLoadCycle()", MelonSource, StringComparison.Ordinal);
+        Assert.Contains("SyndicateHqStorageLoadPatch.CompleteAfterVanillaLoad()", MelonSource, StringComparison.Ordinal);
         Assert.DoesNotContain(".Load(", PatchSource, StringComparison.Ordinal);
         var prefixBody = PatchSource[PatchSource.IndexOf("private static void Prefix", StringComparison.Ordinal)..];
         Assert.DoesNotContain("return false", prefixBody, StringComparison.Ordinal);
@@ -72,10 +79,21 @@ public sealed class SyndicateHqStorageCompositionTests
     [Fact]
     public void Production_composition_binds_storage_to_the_patch_and_interior_and_resets_it_on_teardown()
     {
-        Assert.Contains("new SyndicateHqNativeStorageRuntime", ModSource, StringComparison.Ordinal);
-        Assert.Contains("SyndicateHqStorageLoadPatch.Apply", ModSource, StringComparison.Ordinal);
-        Assert.Contains("SyndicateHqStorageLoadPatch.Reset", ModSource, StringComparison.Ordinal);
-        Assert.Contains("_syndicateHqStorageRuntime", ModSource, StringComparison.Ordinal);
+        Assert.Contains("new SyndicateHqNativeStorageRuntime(", HqModuleSource, StringComparison.Ordinal);
+        Assert.Contains("engine.ApplyHqStorageLoad(", HqModuleSource, StringComparison.Ordinal);
+        Assert.Contains("SyndicateHqStorageLoadPatch.Apply(", MelonSource, StringComparison.Ordinal);
+        Assert.Contains("SyndicateHqStorageLoadPatch.Reset()", MelonSource, StringComparison.Ordinal);
+        Assert.Contains("engine.ResetHqStorageLoad();", RootSource, StringComparison.Ordinal);
+        Assert.Contains("HqStorage?.Dispose();", RootSource, StringComparison.Ordinal);
+
+        using var scope = new CompositionScope();
+        var tables = LifecycleTables.ForRoot(scope.Root);
+
+        CompositionAssertions.AssertPreLoadTable(tables);
+        CompositionAssertions.AssertLoadCompleteTable(tables);
+        Assert.NotNull(scope.Root.HqStorage);
+        scope.Root.Teardown();
+        Assert.Null(scope.Root.HqStorage);
     }
 
     private static string ReadSource(params string[] parts)

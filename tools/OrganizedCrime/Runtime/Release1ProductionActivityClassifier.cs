@@ -1,3 +1,5 @@
+using OrganizedCrime.Model;
+
 namespace OrganizedCrime.Runtime;
 
 /// <summary>What one production pass reads as. Richer than the engine's three values only in that NotReady

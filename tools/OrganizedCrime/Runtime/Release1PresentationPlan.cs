@@ -27,14 +27,10 @@ public enum Release1PresentationCommand
 
     /// <summary>OC-73. The Chief is not a mission, so neither of his two commands ever reaches Release1PresentationCommandRouter.TryInvoke's mission presenters.</summary>
     ChiefCampbellPay,
-    ChiefCampbellDecline
-}
+    ChiefCampbellDecline,
 
-public enum Release1DesiredEntryState
-{
-    Inactive,
-    Active,
-    Complete
+    /// <summary>OC-118. Buys (or extends) Campbell's protection retainer through his own service.</summary>
+    ChiefCampbellBuyProtection
 }
 
 public sealed record Release1DesiredMessage(string CorrelationId, string Text);
@@ -42,12 +38,6 @@ public sealed record Release1DesiredMessage(string CorrelationId, string Text);
 public sealed record Release1DecisionOption(string Label, Release1PresentationCommand Command);
 
 public sealed record Release1DesiredDecision(string Id, string Prompt, IReadOnlyList<Release1DecisionOption> Options);
-
-public sealed record Release1WorldPoint(float X, float Y, float Z);
-
-public sealed record Release1DesiredEntry(string Text, Release1DesiredEntryState State, Release1WorldPoint? Marker);
-
-public sealed record Release1DesiredQuest(string Key, string Title, IReadOnlyList<Release1DesiredEntry> Entries);
 
 public sealed record Release1PresentationPlan(
     IReadOnlyList<Release1DesiredMessage> Messages,

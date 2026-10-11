@@ -1,4 +1,5 @@
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 using Il2CppScheduleOne;
 using UnityEngine;
 
@@ -22,8 +23,23 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         _storage = storage;
     }
 
-    public bool IsCreated => !_destroyPending && !IsUnityNull(_root) && ValidateOwnedRuntime(out _);
+    public bool IsCreated => !_destroyPending && UnityLife.IsAlive(_root) && ValidateOwnedRuntime(out _);
     public bool IsDestroyPending => _destroyPending;
+    // The exact owned root was admitted at creation. Save-only checks stay within its
+    // hierarchy; scene-wide identity discovery remains at create/load boundaries.
+    public bool IsReadyForSave => !_disposed && !_destroyPending && UnityLife.IsAlive(_root) &&
+        _root!.scene.IsValid() && _root.activeInHierarchy && _materials.Values.All(UnityLife.IsAlive) &&
+        ValidateOwnedRuntime(out _, checkSceneIdentity: false);
+
+    public bool TrySetSaveInteractions(bool enabled) =>
+        !_disposed && !_destroyPending && UnityLife.IsAlive(_root) &&
+        (_storage?.TrySetSaveInteractions(enabled) ?? false);
+
+    internal void SetSaveRetentionFailureReporter(Action<string, Exception> reporter)
+    {
+        if (_storage is SyndicateHqNativeStorageRuntime nativeStorage)
+            nativeStorage.SaveRetentionFailureReporter = reporter;
+    }
 
     /// <summary>
     /// The timing seam the interior create and destroy receipts report through. Assigned by the
@@ -39,11 +55,11 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         if (_disposed) { _log("Syndicate HQ interior creation was rejected after disposal."); return false; }
         if (_destroyPending)
         {
-            if (!IsUnityNull(_root)) { _log("Syndicate HQ interior creation is waiting for deferred root destruction."); return false; }
+            if (UnityLife.IsAlive(_root)) { _log("Syndicate HQ interior creation is waiting for deferred root destruction."); return false; }
             _root = null;
             _destroyPending = false;
         }
-        if (!IsUnityNull(_root)) return ValidateOwnedRuntime(out _);
+        if (UnityLife.IsAlive(_root)) return ValidateOwnedRuntime(out _);
         if (!SyndicateHqInteriorDefinition.IsValid(out var definitionReason)) { _log($"Syndicate HQ interior definition was invalid: {definitionReason}"); return false; }
         var stage = "scene snapshot";
         try
@@ -100,10 +116,14 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
                 var storageResult = _storage?.PlaceAtPocket(pocketRoot);
 #if DEBUG
                 if (storageResult is not null)
-                    _log($"Syndicate HQ storage receipt: pocket placement result={storageResult.Status}; ready={storageResult.IsReady}; reason={storageResult.Reason}");
+                {
+                    var receipt = $"Syndicate HQ storage receipt: pocket placement result={storageResult.Status}; ready={storageResult.IsReady}; reason={storageResult.Reason}";
+                    if (storageResult.IsReady) OrganizedCrimeLog.Diagnostic(receipt, _log);
+                    else _log(receipt);
+                }
 #endif
                 if (storageResult is not null && !storageResult.IsReady)
-                    _log($"Syndicate HQ native storage remained inert: {storageResult.Status} — {storageResult.Reason}");
+                    _log($"Syndicate HQ native storage remained inert: {storageResult.Status} - {storageResult.Reason}");
                 return true;
             }
             _log($"Syndicate HQ interior construction failed owned-runtime validation: {validationReason}");
@@ -120,9 +140,10 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
 
     public bool TryGetMarker(string name, out SyndicateHqVector3 position)
     {
-        if (_markers.TryGetValue(name, out var marker) && !IsUnityNull(marker))
+        if (_markers.TryGetValue(name, out var marker) && UnityLife.IsAlive(marker))
         {
-            position = new(marker.position.x, marker.position.y, marker.position.z);
+            var nativePosition = marker.position;
+            position = new(nativePosition.x, nativePosition.y, nativePosition.z);
             return true;
         }
         position = default;
@@ -135,18 +156,18 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
     {
         _storage?.DisableInteractions();
         _markers.Clear();
-        if (!IsUnityNull(_root) && !_destroyPending)
+        if (UnityLife.IsAlive(_root) && !_destroyPending)
         {
             UnityEngine.Object.Destroy(_root);
             _destroyPending = true;
         }
-        if (IsUnityNull(_root))
+        if (!UnityLife.IsAlive(_root))
         {
             _root = null;
             _destroyPending = false;
         }
         foreach (var material in _materials.Values)
-            if (!IsUnityNull(material)) UnityEngine.Object.Destroy(material);
+            if (UnityLife.IsAlive(material)) UnityEngine.Object.Destroy(material);
         _materials.Clear();
     }
 
@@ -166,7 +187,7 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         cube.transform.localScale = ToUnity(definition.Scale);
 
         var renderer = cube.GetComponent<MeshRenderer>();
-        if (!IsUnityNull(renderer))
+        if (!UnityLife.IsUnityNull(renderer))
         {
             renderer!.sharedMaterial = _materials[definition.MaterialRole];
             renderer.enabled = definition.IsVisible;
@@ -175,7 +196,7 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         }
 
         var collider = cube.GetComponent<Collider>();
-        if (!definition.HasCollider && !IsUnityNull(collider))
+        if (!definition.HasCollider && !UnityLife.IsUnityNull(collider))
         {
             collider!.enabled = false;
             UnityEngine.Object.Destroy(collider);
@@ -201,7 +222,7 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
     /// </summary>
     private static GameObject[] SnapshotSceneObjects() =>
         Resources.FindObjectsOfTypeAll<GameObject>()
-            .Where(gameObject => !IsUnityNull(gameObject) && gameObject.scene.IsValid())
+            .Where(gameObject => !UnityLife.IsUnityNull(gameObject) && gameObject.scene.IsValid())
             .ToArray();
 
     /// <summary>
@@ -262,7 +283,7 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         CloneVisualTree(source.transform, container.transform, true, definition.KeepColliders, definition.IncludeInactiveChildren);
 
         var renderers = container.GetComponentsInChildren<Renderer>(includeInactive: true)
-            .Where(renderer => !IsUnityNull(renderer))
+            .Where(renderer => !UnityLife.IsUnityNull(renderer))
             .ToArray();
         if (renderers.Length == 0)
             throw new InvalidOperationException($"Native HQ prop '{definition.Name}' had no visual renderers.");
@@ -292,10 +313,10 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         clone.transform.localScale = source.localScale;
 
         var sourceFilter = source.GetComponent<MeshFilter>();
-        if (!IsUnityNull(sourceFilter) && !IsUnityNull(sourceFilter!.sharedMesh))
+        if (!UnityLife.IsUnityNull(sourceFilter) && !UnityLife.IsUnityNull(sourceFilter!.sharedMesh))
             clone.AddComponent<MeshFilter>().sharedMesh = sourceFilter.sharedMesh;
         var sourceRenderer = source.GetComponent<MeshRenderer>();
-        if (!IsUnityNull(sourceRenderer))
+        if (!UnityLife.IsUnityNull(sourceRenderer))
         {
             var renderer = clone.AddComponent<MeshRenderer>();
             renderer.sharedMaterials = sourceRenderer!.sharedMaterials;
@@ -309,28 +330,28 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         for (var index = 0; index < source.childCount; index++)
         {
             var child = source.GetChild(index);
-            if (!IsUnityNull(child) && (includeInactiveChildren || child!.gameObject.activeSelf))
+            if (!UnityLife.IsUnityNull(child) && (includeInactiveChildren || child!.gameObject.activeSelf))
                 CloneVisualTree(child!, clone.transform, false, keepColliders, includeInactiveChildren);
         }
     }
 
     private static void CopyVisualColliders(Transform source, GameObject destination)
     {
-        foreach (var box in source.GetComponents<BoxCollider>().Where(collider => !IsUnityNull(collider) && collider.enabled))
+        foreach (var box in source.GetComponents<BoxCollider>().Where(collider => !UnityLife.IsUnityNull(collider) && collider.enabled))
         {
             var clone = destination.AddComponent<BoxCollider>();
             clone.center = box.center;
             clone.size = box.size;
             clone.isTrigger = false;
         }
-        foreach (var sphere in source.GetComponents<SphereCollider>().Where(collider => !IsUnityNull(collider) && collider.enabled))
+        foreach (var sphere in source.GetComponents<SphereCollider>().Where(collider => !UnityLife.IsUnityNull(collider) && collider.enabled))
         {
             var clone = destination.AddComponent<SphereCollider>();
             clone.center = sphere.center;
             clone.radius = sphere.radius;
             clone.isTrigger = false;
         }
-        foreach (var capsule in source.GetComponents<CapsuleCollider>().Where(collider => !IsUnityNull(collider) && collider.enabled))
+        foreach (var capsule in source.GetComponents<CapsuleCollider>().Where(collider => !UnityLife.IsUnityNull(collider) && collider.enabled))
         {
             var clone = destination.AddComponent<CapsuleCollider>();
             clone.center = capsule.center;
@@ -339,7 +360,7 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
             clone.direction = capsule.direction;
             clone.isTrigger = false;
         }
-        foreach (var mesh in source.GetComponents<MeshCollider>().Where(collider => !IsUnityNull(collider) && collider.enabled && !IsUnityNull(collider.sharedMesh)))
+        foreach (var mesh in source.GetComponents<MeshCollider>().Where(collider => !UnityLife.IsUnityNull(collider) && collider.enabled && !UnityLife.IsUnityNull(collider.sharedMesh)))
         {
             var clone = destination.AddComponent<MeshCollider>();
             clone.sharedMesh = mesh.sharedMesh;
@@ -411,11 +432,11 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         };
         try
         {
-            if (IsUnityNull(shellRoot)) return null;
+            if (UnityLife.IsUnityNull(shellRoot)) return null;
             return shellRoot!.GetComponentsInChildren<Renderer>(includeInactive: true)
-                .Where(renderer => !IsUnityNull(renderer))
+                .Where(renderer => !UnityLife.IsUnityNull(renderer))
                 .SelectMany(renderer => renderer.sharedMaterials)
-                .Where(material => !IsUnityNull(material) && keywords.Any(keyword => material.name.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+                .Where(material => !UnityLife.IsUnityNull(material) && keywords.Any(keyword => material.name.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
                 .OrderBy(material => material.name, StringComparer.Ordinal)
                 .FirstOrDefault();
         }
@@ -435,38 +456,43 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         _ => new Color(0.86f, 0.36f, 0.07f, 1f)
     };
 
-    private bool ValidateOwnedRuntime(out string reason)
+    private bool ValidateOwnedRuntime(out string reason, bool checkSceneIdentity = true)
     {
-        if (IsUnityNull(_root)) { reason = "the owned root was unavailable"; return false; }
+        if (!UnityLife.IsAlive(_root)) { reason = "the owned root was unavailable"; return false; }
         if (_destroyPending) { reason = "the owned root was pending destruction"; return false; }
         if (!string.Equals(_root!.name, SyndicateHqContract.RootName, StringComparison.Ordinal)) { reason = $"the owned root name was '{_root.name}'"; return false; }
-        var sameNameRoots = Resources.FindObjectsOfTypeAll<GameObject>()
-            .Where(gameObject => !IsUnityNull(gameObject) && gameObject.scene.IsValid() && string.Equals(gameObject.name, SyndicateHqContract.RootName, StringComparison.Ordinal))
-            .ToArray();
-        if (!SyndicateHqInteriorOwnership.IsRetainedNativeRoot(
-                _root.GetInstanceID(),
-                sameNameRoots.Select(gameObject => gameObject.GetInstanceID()).ToArray(),
-                out reason)) return false;
+        if (checkSceneIdentity)
+        {
+            var sameNameRoots = Resources.FindObjectsOfTypeAll<GameObject>()
+                .Where(gameObject => UnityLife.IsAlive(gameObject) && gameObject.scene.IsValid() && string.Equals(gameObject.name, SyndicateHqContract.RootName, StringComparison.Ordinal))
+                .ToArray();
+            if (!SyndicateHqInteriorOwnership.IsRetainedNativeRoot(
+                    _root.GetInstanceID(),
+                    sameNameRoots.Select(gameObject => gameObject.GetInstanceID()).ToArray(),
+                    out reason)) return false;
+        }
+        var rootTransform = _root.transform;
+        if (!UnityLife.IsAlive(rootTransform)) { reason = "the owned root transform was unavailable"; return false; }
         foreach (var marker in SyndicateHqInteriorDefinition.Markers)
-            if (IsUnityNull(_root.transform.Find(marker.Name))) { reason = $"marker '{marker.Name}' was unavailable"; return false; }
+            if (!UnityLife.IsAlive(rootTransform.Find(marker.Name))) { reason = $"marker '{marker.Name}' was unavailable"; return false; }
         foreach (var geometryName in SyndicateHqInteriorDefinition.RequiredColliderNames)
         {
-            var geometry = _root.transform.Find(geometryName);
-            if (IsUnityNull(geometry)) { reason = $"required geometry '{geometryName}' was unavailable"; return false; }
-            if (IsUnityNull(geometry!.GetComponent<Collider>())) { reason = $"required collider '{geometryName}' was unavailable"; return false; }
+            var geometry = rootTransform.Find(geometryName);
+            if (!UnityLife.IsAlive(geometry)) { reason = $"required geometry '{geometryName}' was unavailable"; return false; }
+            if (!UnityLife.IsAlive(geometry!.GetComponent<Collider>())) { reason = $"required collider '{geometryName}' was unavailable"; return false; }
         }
         foreach (var nativeProp in SyndicateHqInteriorDefinition.NativeProps.Where(item => item.IsRequired))
         {
-            var prop = _root.transform.Find(nativeProp.Name);
-            if (IsUnityNull(prop)) { reason = $"required native prop '{nativeProp.Name}' was unavailable"; return false; }
-            if (prop!.GetComponentsInChildren<Renderer>(includeInactive: true).All(IsUnityNull)) { reason = $"required native prop '{nativeProp.Name}' had no renderer"; return false; }
-            if (nativeProp.KeepColliders && prop.GetComponentsInChildren<Collider>(includeInactive: true).All(IsUnityNull)) { reason = $"required native prop '{nativeProp.Name}' had no collider"; return false; }
+            var prop = rootTransform.Find(nativeProp.Name);
+            if (!UnityLife.IsAlive(prop)) { reason = $"required native prop '{nativeProp.Name}' was unavailable"; return false; }
+            if (!prop!.GetComponentsInChildren<Renderer>(includeInactive: true).Any(UnityLife.IsAlive)) { reason = $"required native prop '{nativeProp.Name}' had no renderer"; return false; }
+            if (nativeProp.KeepColliders && !prop.GetComponentsInChildren<Collider>(includeInactive: true).Any(UnityLife.IsAlive)) { reason = $"required native prop '{nativeProp.Name}' had no collider"; return false; }
         }
         foreach (var lightDefinition in SyndicateHqInteriorDefinition.Lights)
         {
-            var light = _root.transform.Find(lightDefinition.Name);
-            if (IsUnityNull(light)) { reason = $"light object '{lightDefinition.Name}' was unavailable"; return false; }
-            if (IsUnityNull(light!.GetComponent<Light>())) { reason = $"light component '{lightDefinition.Name}' was unavailable"; return false; }
+            var light = rootTransform.Find(lightDefinition.Name);
+            if (!UnityLife.IsAlive(light)) { reason = $"light object '{lightDefinition.Name}' was unavailable"; return false; }
+            if (!UnityLife.IsAlive(light!.GetComponent<Light>())) { reason = $"light component '{lightDefinition.Name}' was unavailable"; return false; }
         }
         reason = "the exact owned root, markers, collision shell, and lights were present";
         return true;
@@ -477,7 +503,7 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
         var parts = new Stack<string>();
         Transform? current = transform;
         var guard = 0;
-        while (!IsUnityNull(current) && guard++ < 64)
+        while (!UnityLife.IsUnityNull(current) && guard++ < 64)
         {
             parts.Push(current!.name);
             current = current.parent;
@@ -486,6 +512,4 @@ public sealed class SyndicateHqInteriorRuntime : ISyndicateHqInterior, IDisposab
     }
 
     private static Vector3 ToUnity(SyndicateHqVector3 value) => new(value.X, value.Y, value.Z);
-    private static bool IsUnityNull(object? value) => value is null || value == null;
-    private static bool IsUnityNull(UnityEngine.Object? value) => value == null;
 }

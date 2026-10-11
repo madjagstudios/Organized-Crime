@@ -1,5 +1,7 @@
 using OrganizedCrime.Model;
 using OrganizedCrime.Persistence;
+using OrganizedCrime.Runtime;
+using OrganizedCrime.Runtime.Composition;
 using Xunit;
 
 namespace OrganizedCrime.Tests;
@@ -11,6 +13,7 @@ namespace OrganizedCrime.Tests;
 /// reads all twenty five dead drops, so production loads must never reach it. Each guard pins the
 /// shape of the fix, not only its effect, because the two Unity paths cannot run headless.
 /// </summary>
+[Collection("OC-151 composition scope")]
 public sealed class Release1SaveBoundaryCostGuardTests
 {
     [Fact]
@@ -38,17 +41,27 @@ public sealed class Release1SaveBoundaryCostGuardTests
     }
 
     [Fact]
-    public void The_hq_interior_still_tears_down_at_every_boundary()
+    public void The_hq_interior_retains_only_safe_saves_and_still_tears_down_at_load_and_scene_boundaries()
     {
-        // OC-63 deliberately leaves the boundary teardown alone: the save must not capture a player
-        // standing inside a pocket interior that will not exist on the next load, and the native
-        // hold room closets are taken out of interaction by the same teardown. Keeping the interior
-        // alive across a save is not something a door fingerprint check can make safe on its own.
+        // OC-76: only a verified outside player and live, ready interior may retain across saves.
+        // Inside, transitions, or any doubt keep player-return teardown; retained saves disable
+        // native closet interactions and entry until completion. Load/scene teardown stays exact.
         var source = ReadRuntime("SyndicateHqRuntimeService.cs");
 
-        Assert.Contains("public bool OnSaveStart() => TeardownAtBoundary();", source, StringComparison.Ordinal);
+        Assert.Contains("if (CanRetainForSave() && _interior.TrySetSaveInteractions(false))", source, StringComparison.Ordinal);
         Assert.Contains("public bool OnPreLoad() => TeardownAtBoundary();", source, StringComparison.Ordinal);
         Assert.Contains("public bool OnPreSceneChange() => TeardownAtBoundary();", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Retained_save_readiness_uses_the_owned_hierarchy_without_a_scene_snapshot()
+    {
+        var source = ReadRuntime("SyndicateHqInteriorRuntime.cs");
+        Assert.Contains("ValidateOwnedRuntime(out _, checkSceneIdentity: false)", source, StringComparison.Ordinal);
+        Assert.Contains("if (checkSceneIdentity)", source, StringComparison.Ordinal);
+        var service = ReadRuntime("SyndicateHqRuntimeService.cs");
+        Assert.Contains("!_interior.IsReadyForSave", service, StringComparison.Ordinal);
+        Assert.Contains("_interior.IsReadyForSave && _interior.TrySetSaveInteractions(true)", service, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -97,19 +110,32 @@ public sealed class Release1SaveBoundaryCostGuardTests
     [Fact]
     public void The_oc_52_staging_proof_at_load_stays_behind_the_owner_qa_preference()
     {
-        var mod = ReadMod();
-        var index = mod.IndexOf("OC-52 staging proof at load", StringComparison.Ordinal);
-        Assert.True(index > 0, "The OC-52 staging proof at load receipt was not found.");
+        using var disabled = new CompositionScope();
+        var disabledBefore = disabled.Logs.Count;
+        LifecycleTables.ForRoot(disabled.Root).LoadCompleteTail!();
+        Assert.Equal(disabledBefore, disabled.Logs.Count);
 
-        var gate = mod.LastIndexOf("if (_ownerQaKeysEnabled", index, StringComparison.Ordinal);
-        Assert.True(gate > 0, "The OC-52 staging proof at load was not gated on the owner QA preference.");
+        using var enabled = new CompositionScope(engine => engine.OwnerQaKeysResult = true);
+        enabled.Root.CourtesyWorld = new ScriptableCourtesyWorld
+        {
+            DropsStatus = Release1SmallCourtesyWorldReadStatus.Ready,
+            Drops = new[] { new Release1SmallCourtesyDropCandidate("drop-1", "Drop 1", "staged", 0d, 0d, 0d, false) },
+            SlotsStatus = Release1SmallCourtesyWorldReadStatus.Ready,
+            Slots = new[] { new Release1SmallCourtesySlotSnapshot(0, "product-a", null, 2, false, 1f) },
+        };
+        var enabledBefore = enabled.Logs.Count;
+        LifecycleTables.ForRoot(enabled.Root).LoadCompleteTail!();
+        Assert.Contains("[Organized Crime] OC-52 staging proof at load: dead drops read: 1", enabled.Logs.Skip(enabledBefore));
     }
 
     [Fact]
-    public void The_mod_reads_the_timing_threshold_from_a_melon_preference()
+    public void The_composition_reads_the_timing_threshold_from_a_melon_preference()
     {
-        var mod = ReadMod();
-        Assert.Contains("TimingReceiptThresholdPreference.Read()", mod, StringComparison.Ordinal);
+        var melon = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "tools", "OrganizedCrime", "Runtime", "Composition", "MelonEngineAdapters.cs"));
+        Assert.Contains("TimingReceiptThresholdPreference.Read()", melon, StringComparison.Ordinal);
+
+        using var scope = new CompositionScope();
+        Assert.Equal(new[] { "read:OwnerQaKeys", "read:TimingThreshold" }, scope.Engine.Trace.Take(2).ToList());
 
         var preference = ReadRuntime("TimingReceiptThresholdPreference.cs");
         Assert.Contains("\"OrganizedCrime\"", preference, StringComparison.Ordinal);
@@ -133,9 +159,6 @@ public sealed class Release1SaveBoundaryCostGuardTests
         }
         return total;
     }
-
-    private static string ReadMod() =>
-        File.ReadAllText(Path.Combine(FindRepositoryRoot(), "tools", "OrganizedCrime", "Mod.cs"));
 
     private static string ReadRuntime(string fileName) =>
         File.ReadAllText(Path.Combine(FindRepositoryRoot(), "tools", "OrganizedCrime", "Runtime", fileName));

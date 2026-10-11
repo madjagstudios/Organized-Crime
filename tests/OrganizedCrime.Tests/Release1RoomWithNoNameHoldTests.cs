@@ -231,8 +231,12 @@ public sealed class Release1RoomWithNoNameHoldTests
     [Fact]
     public void The_small_courtesy_world_contract_exposes_no_member_that_writes_a_closet()
     {
-        var mutatingMembers = typeof(IRelease1SmallCourtesyWorld).GetMethods()
-            .Where(method => method.ReturnType == typeof(Release1SmallCourtesyWorldMutationStatus));
+        var mutatingMembers = typeof(IRelease1SmallCourtesyWorld).GetInterfaces()
+            .Append(typeof(IRelease1SmallCourtesyWorld))
+            .SelectMany(type => type.GetMethods())
+            .Where(method => method.ReturnType == typeof(Release1SmallCourtesyWorldMutationStatus)).ToArray();
+
+        Assert.NotEmpty(mutatingMembers);
 
         Assert.All(mutatingMembers, method =>
             Assert.DoesNotContain("closet", method.Name, StringComparison.OrdinalIgnoreCase));

@@ -9,7 +9,7 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
     public void Authoritative_layout_has_no_failures_and_allows_outside_points()
     {
         var result = FishWarehouseEmployeePointLayoutValidator.Validate(
-            FishWarehouseEmployeeInfrastructureDefinition.Capacity,
+            FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount,
             FishWarehouseEmployeeInfrastructureDefinition.IdlePoints,
             FishWarehouseEmployeePointLayoutRules.Default);
 
@@ -18,9 +18,9 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
     }
 
     [Fact]
-    public void Nine_or_fewer_points_fail_with_too_few()
+    public void Nineteen_or_fewer_points_fail_with_too_few()
     {
-        var result = Validate(FishWarehouseEmployeeInfrastructureDefinition.IdlePoints.Take(9));
+        var result = Validate(FishWarehouseEmployeeInfrastructureDefinition.IdlePoints.Take(19));
 
         Assert.False(result.Succeeded);
         Assert.Contains("too-few-idle-points", result.FailureReasons);
@@ -28,11 +28,11 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
     }
 
     [Fact]
-    public void More_than_ten_points_fail_with_too_many()
+    public void More_than_twenty_points_fail_with_too_many()
     {
         var points = FishWarehouseEmployeeInfrastructureDefinition.IdlePoints
             .Append(new FishWarehouseEmployeePointDefinition(
-                "OC_FishWarehouse_EmployeeIdle_10",
+                "OC_FishWarehouse_EmployeeIdle_20",
                 -3f,
                 0f,
                 12.5f));
@@ -47,11 +47,11 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
     public void Null_and_malformed_inputs_fail_closed_with_named_reasons()
     {
         var missing = FishWarehouseEmployeePointLayoutValidator.Validate(
-            10,
+            20,
             null,
             FishWarehouseEmployeePointLayoutRules.Default);
         var malformed = Validate(FishWarehouseEmployeeInfrastructureDefinition.IdlePoints
-            .Take(9)
+            .Take(19)
             .Append(null!));
         var malformedName = Validate(FishWarehouseEmployeeInfrastructureDefinition.IdlePoints
             .Select((point, index) => index == 0 ? point with { Name = null! } : point));
@@ -97,9 +97,10 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
     [Fact]
     public void Points_that_are_too_close_fail_with_named_spacing_reason()
     {
+        var neighbour = FishWarehouseEmployeeInfrastructureDefinition.IdlePoints[8];
         var points = FishWarehouseEmployeeInfrastructureDefinition.IdlePoints
             .Select((point, index) => index == 9
-                ? point with { X = -4.42f, Z = 10.04f }
+                ? point with { X = neighbour.X + 0.01f, Z = neighbour.Z + 0.01f }
                 : point);
 
         var result = Validate(points);
@@ -119,8 +120,8 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
         var wallPoints = ReplacePoint(4, -7.5f, 0f, 1.5f);
         var aperturePoints = ReplacePoint(4, -7.5f, 0f, 1.5f);
 
-        var wallResult = FishWarehouseEmployeePointLayoutValidator.Validate(10, wallPoints, wallRules);
-        var apertureResult = FishWarehouseEmployeePointLayoutValidator.Validate(10, aperturePoints, apertureRules);
+        var wallResult = FishWarehouseEmployeePointLayoutValidator.Validate(20, wallPoints, wallRules);
+        var apertureResult = FishWarehouseEmployeePointLayoutValidator.Validate(20, aperturePoints, apertureRules);
 
         Assert.Contains("wall-clearance", wallResult.FailureReasons);
         Assert.Contains("aperture-clearance", apertureResult.FailureReasons);
@@ -132,7 +133,7 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
         var rules = RulesWith(minimumPairwiseSpacing: float.NaN);
 
         var result = FishWarehouseEmployeePointLayoutValidator.Validate(
-            10,
+            20,
             FishWarehouseEmployeeInfrastructureDefinition.IdlePoints,
             rules);
 
@@ -143,7 +144,7 @@ public sealed class FishWarehouseEmployeePointLayoutValidationTests
     private static FishWarehouseEmployeePointLayoutValidationResult Validate(
         IEnumerable<FishWarehouseEmployeePointDefinition?> points) =>
         FishWarehouseEmployeePointLayoutValidator.Validate(
-            FishWarehouseEmployeeInfrastructureDefinition.Capacity,
+            FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount,
             points,
             FishWarehouseEmployeePointLayoutRules.Default);
 

@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 18,
+  "state": {
+    "playerId": "76561190000000001",
+    "phase": "Active",
+    "startElapsedDay": 21,
+    "lastProcessedElapsedDay": 25,
+    "revision": 75,
+    "jobBoard": {
+      "openOffer": null,
+      "activeJob": {
+        "cashMovement": null,
+        "storageRun": {
+          "route": {
+            "pickup": {
+              "guid": "e5399b56-22a5-4a2c-a254-cc81e3ab2f75",
+              "name": "Behind bank",
+              "x": 76.05561828613281,
+              "y": 0.9328043460845947,
+              "z": 37.03160095214844
+            },
+            "handoff": {
+              "guid": "5aeef10c-955d-4fdb-9061-38f4ad7a6289",
+              "name": "Alleyway behind grocery store",
+              "x": 5.198699951171875,
+              "y": 0.9399999976158142,
+              "z": 72.30970001220703
+            },
+            "productId": "testproduct2",
+            "productName": "TestProduct2",
+            "packagingId": "brick",
+            "packagingName": "Brick",
+            "brickCount": 2,
+            "stagedSlotIndex": 0,
+            "staged": true,
+            "custody": true,
+            "removalConfirmed": false
+          },
+          "holdMinutes": 720,
+          "stowedAt": 35715,
+          "closetGuid": "bb63e787-4c46-4627-8f20-e2429f13a574",
+          "missingSince": null,
+          "released": true,
+          "pendingSlot": null,
+          "pendingPreQuantity": null,
+          "creditBefore": null
+        },
+        "jobId": 2,
+        "offerId": 2,
+        "jobType": "TemporaryStorageSafehouse",
+        "reward": 15500,
+        "acceptedDay": 4,
+        "deadlineDay": 7,
+        "extensionUsed": false,
+        "delivery": null,
+        "recovery": null,
+        "acceptedGameMinutes": null,
+        "expiresGameMinutes": null
+      },
+      "cooldownUntilDay": 2,
+      "lastProcessedDay": 4,
+      "lastTypeOffered": "TemporaryStorageSafehouse",
+      "typesSeen": [
+        "DeadDrop",
+        "PackageRecovery",
+        "TemporaryStorageSafehouse"
+      ],
+      "refusalStreak": 0,
+      "nellHintIssued": false,
+      "cooperationVisitIssued": false,
+      "successfulJobs": 1,
+      "successfulJobsSinceWarehousePurchase": 0,
+      "nextOfferId": 3,
+      "lastDeclinedOfferId": null,
+      "lastExpiredOfferId": null,
+      "lastRefusedOfferId": null,
+      "lastCompletedJob": {
+        "cashMovement": null,
+        "jobId": 1,
+        "jobType": "DeadDrop",
+        "reward": 17000
+      },
+      "lastEmergencySupplyOfferId": null,
+      "nextJobId": 3
+    },
+    "ledger": {
+      "entries": [],
+      "lastProcessedDay": 4,
+      "nextId": 1
+    },
+    "cuts": {
+      "entries": [],
+      "lastProcessedDay": 4
+    },
+    "presentationReceipts": [
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/offer-1",
+        "revision": 3
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/job-1-accepted",
+        "revision": 6
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/job-1-completed",
+        "revision": 9
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d1-issued",
+        "revision": 13
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d1-receipt-1",
+        "revision": 17
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d1-receipt-8",
+        "revision": 32
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d1-completed",
+        "revision": 36
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d2-issued",
+        "revision": 38
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d2-receipt-1",
+        "revision": 42
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d2-receipt-2",
+        "revision": 46
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d2-receipt-3",
+        "revision": 49
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/demand-d2-completed",
+        "revision": 53
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/offer-2",
+        "revision": 63
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/job-2-accepted",
+        "revision": 69
+      },
+      {
+        "correlationId": "oc11-ch3/v1/76561190000000001/job-2-storage-released",
+        "revision": 75
+      }
+    ],
+    "paymentShortfallCount": 0,
+    "warehouseOffer": null,
+    "arthurVisitPending": "None",
+    "arthurVisitMissedEvenings": 0,
+    "arthurVisitLastAttemptedDay": -1,
+    "arthurCooperationDelivered": false,
+    "arthurWarningFollowups": 0,
+    "arthurRanOffs": 0,
+    "arthurBeatings": 0,
+    "activeDemand": null,
+    "madeProductIds": [
+      "testproduct3"
+    ],
+    "lastDemandWeek": 3,
+    "nextDemandId": 3,
+    "lastDemandOutcome": {
+      "demandId": "d2",
+      "productName": "TestProduct3",
+      "leftUnits": 0,
+      "amount": 4750,
+      "completed": true
+    },
+    "warehouseCapacityTier": 1,
+    "demandsCompleted": 2,
+    "checkpointTargetCode": "dockswarehouse",
+    "checkpointTargetDay": 25,
+    "sweep": null,
+    "lastSweepStartMinutes": 34304
+  }
+}

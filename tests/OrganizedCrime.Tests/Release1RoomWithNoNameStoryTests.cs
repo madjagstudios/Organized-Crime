@@ -8,18 +8,19 @@ namespace OrganizedCrime.Tests;
 public sealed class Release1RoomWithNoNameStoryTests
 {
     [Fact]
-    public void The_schema_is_version_eleven_and_reads_versions_one_to_eleven()
+    public void The_schema_is_version_fourteen_and_reads_versions_one_to_fourteen()
     {
-        // Re-pinned for OC-73 Task 3: OC-73 advanced the schema to v11 (the Chief record), which this
-        // pre-existing OC-57-era test never followed. The v11 bump itself is out of this task's
-        // narrower scope; only the stale literal here is updated, to the same current-version pattern
-        // every other read-every-supported-version assertion in this suite already uses.
-        Assert.Equal(11, Release1StorySaveCodec.CurrentSchemaVersion);
-        foreach (var version in new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 })
+        // Re-pinned for OC-73 Task 3 (v11, the Chief record), again for D1/OC-75 (v12, the Chief
+        // late fee fields), for OC-118 (v13, the Chief protection fields), and again for OC-74 (v14,
+        // the Chief forced-Wanted fields): each bump updates only the stale literals here, to the
+        // same current-version pattern every other read-every-supported-version assertion in this
+        // suite already uses.
+        Assert.Equal(14, Release1StorySaveCodec.CurrentSchemaVersion);
+        foreach (var version in new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 })
         {
             var json = $"{{\"schemaVersion\": {version}, \"story\": null}}";
             Assert.True(Release1StorySaveCodec.TryDeserialize(json, out var envelope, out var result), result.Message);
-            Assert.Equal(11, envelope!.SchemaVersion);
+            Assert.Equal(14, envelope!.SchemaVersion);
         }
     }
 

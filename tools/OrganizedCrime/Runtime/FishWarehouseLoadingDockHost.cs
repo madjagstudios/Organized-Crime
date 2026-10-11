@@ -84,7 +84,7 @@ public sealed class FishWarehouseLoadingDockHost
             _docks.AddRange(staged.Select(entry => entry.Dock));
             _parkingLots.AddRange(staged.Select(entry => entry.Parking));
             _detectors.AddRange(staged.Select(entry => entry.Detector));
-            log?.Invoke("Fish Warehouse native loading docks enabled (count=2, indices=0,1, source=barn, offStreet=True).");
+            OrganizedCrimeLog.Diagnostic("Fish Warehouse native loading docks enabled (count=2, indices=0,1, source=barn, offStreet=True).", log);
             return true;
         }
         catch (Exception ex)
@@ -198,8 +198,9 @@ public sealed class FishWarehouseLoadingDockHost
             dock.ParentProperty = property;
             if (dock.InputSlots.Count != 0 || dock.OutputSlots.Count != 0)
                 throw new InvalidOperationException("Cloned Barn loading dock did not preserve zero slots.");
+            // 0.4.7 made the field private (_parentParentLot), and Init() is private and uninspected, so assign the parent lot explicitly.
             foreach (var spot in clonedParkingSpots)
-                spot.ParentLot = parking;
+                spot._parentParentLot = parking;
 
             var alignmentPoint = clonedParkingSpots[0].AlignmentPoint ?? throw new InvalidOperationException("Cloned parking spot has no alignment point.");
             var targetPosition = property.transform.TransformPoint(new Vector3(definition.CenterX, definition.CenterY, definition.CenterZ));
@@ -265,7 +266,7 @@ public sealed class FishWarehouseLoadingDockHost
              entry.Dock.InputSlots.Count == 0 &&
              entry.Dock.OutputSlots.Count == 0 &&
              entry.Parking.ParkingSpots is not null && entry.Parking.ParkingSpots.Count > 0 &&
-             entry.Parking.ParkingSpots.ToArray().All(spot => spot.ParentLot == entry.Parking && IsChildOf(entry.Root.transform, spot.transform)) &&
+             entry.Parking.ParkingSpots.ToArray().All(spot => spot._parentParentLot == entry.Parking && IsChildOf(entry.Root.transform, spot.transform)) &&
              IsChildOf(entry.Root.transform, entry.Dock.transform) &&
              IsChildOf(entry.Root.transform, entry.Parking.transform) &&
              IsChildOf(entry.Root.transform, entry.Detector.transform) &&

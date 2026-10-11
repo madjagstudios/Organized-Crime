@@ -20,11 +20,10 @@ public enum Release1KeepTheLightsOffDecisionStatus
     PersistenceDeferred, Rejected, Inactive, Disposed
 }
 
-// The presentation layer's Ambiguous card stage (Release1KeepTheLightsOffPresentation.Build) is
-// driven directly off Release1StoryState.NativeEffects filtered to this mission's own key
-// (Release1KeepTheLightsOffPresentation.cs:74-77), never off a value ReconcileCensus returns, so
-// this enum carries no Ambiguous member: ReconcileCensus has nothing to report for a card state it
-// never decides.
+// Release1KeepTheLightsOffPresentation.Build drives the Ambiguous card stage
+// directly off Release1StoryState.NativeEffects filtered to this mission's own key,
+// never off a value ReconcileCensus returns. This enum carries no Ambiguous member:
+// ReconcileCensus has nothing to report for a card state it never decides.
 public enum Release1KeepTheLightsOffCensusStatus
 {
     NoWork, NotReady, Holding, WindowStarted, BreachRecorded, Failed,

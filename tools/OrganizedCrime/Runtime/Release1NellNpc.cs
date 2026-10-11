@@ -65,17 +65,17 @@ public sealed class Release1NellNpc : NPC, IRelease1MessagingNpc
             var source = NPC.Get(npcId);
             if (source?.Icon is null)
             {
-                MelonLogger.Msg($"[Organized Crime] Nell portrait: no icon found on '{npcId}'; keeping the default.");
+                OrganizedCrimeLog.Receipt($"Nell portrait: no icon found on '{npcId}'; keeping the default.");
                 return;
             }
 
             Icon = source.Icon;
             RefreshMessagingIcons();
-            MelonLogger.Msg($"[Organized Crime] Nell portrait borrowed from NPC '{npcId}'.");
+            OrganizedCrimeLog.Diagnostic($"Nell portrait borrowed from NPC '{npcId}'.", OrganizedCrimeLog.Receipt);
         }
         catch (Exception exception)
         {
-            MelonLogger.Msg($"[Organized Crime] Nell portrait borrow from '{npcId}' failed ({exception.GetType().Name}); keeping the default.");
+            OrganizedCrimeLog.Receipt($"Nell portrait borrow from '{npcId}' failed ({exception.GetType().Name}); keeping the default.");
         }
     }
 

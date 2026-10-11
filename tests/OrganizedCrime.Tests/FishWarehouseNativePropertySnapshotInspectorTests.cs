@@ -21,11 +21,15 @@ public sealed class FishWarehouseNativePropertySnapshotInspectorTests
         var inspected = inspector.TryInspect(
             Encoding.UTF8.GetBytes(incompleteRequiredFieldJson),
             out var snapshot,
-            out var failureReason);
+            out var failureReason,
+            out var failureDetail);
 
         Assert.False(inspected);
         Assert.Null(snapshot);
         Assert.Contains("inspection failed", failureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Employees", failureReason, StringComparison.Ordinal);
+        Assert.Contains("JsonException", failureDetail, StringComparison.Ordinal);
+        Assert.Contains("TryInspect", failureDetail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -33,7 +37,7 @@ public sealed class FishWarehouseNativePropertySnapshotInspectorTests
     {
         var inspector = new FishWarehouseNativePropertySnapshotInspector();
 
-        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(WrappedNativePropertyJson), out var snapshot, out var failureReason), failureReason);
+        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(WrappedNativePropertyJson), out var snapshot, out var failureReason, out _), failureReason);
 
         Assert.Equal("locker-object-guid", snapshot.Objects[0].Guid);
         Assert.Equal("fish-warehouse-grid-guid", snapshot.Objects[0].GridGuid);
@@ -60,7 +64,7 @@ public sealed class FishWarehouseNativePropertySnapshotInspectorTests
     {
         var inspector = new FishWarehouseNativePropertySnapshotInspector();
 
-        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(MeasuredNativePropertyJson), out var snapshot, out var failureReason), failureReason);
+        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(MeasuredNativePropertyJson), out var snapshot, out var failureReason, out _), failureReason);
 
         Assert.Equal("oc_fishwarehouse", snapshot.PropertyCode);
         Assert.True(snapshot.IsOwned);
@@ -94,11 +98,74 @@ public sealed class FishWarehouseNativePropertySnapshotInspectorTests
     }
 
     [Fact]
+    public void Preserved_chemist_file_inspects_with_one_locker_and_one_chemist()
+    {
+        // Sanitized transcription of the OC-128 owner run: a 0.4.7 wrapped
+        // ChemistData record with no Identity key plus its locker. This file
+        // failed the whole warehouse before the identity map.
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+
+        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(ChemistWrappedNativePropertyJson), out var snapshot, out var failureReason, out _), failureReason);
+
+        var locker = Assert.Single(snapshot.Objects);
+        Assert.Equal("22222222-2222-2222-2222-222222222222", locker.Guid);
+        Assert.Equal("33333333-3333-3333-3333-333333333333", locker.GridGuid);
+        Assert.Equal(0, locker.LoadOrder);
+        Assert.Equal("locker", locker.ItemId);
+        Assert.True(locker.IsSavedHome);
+
+        var chemist = Assert.Single(snapshot.Employees);
+        Assert.Equal("11111111-1111-1111-1111-111111111111", chemist.Guid);
+        Assert.Equal("ChemistData", chemist.DataType);
+        Assert.Equal("Chemist", chemist.Identity);
+        Assert.False(chemist.PaidForToday);
+        Assert.Equal("22222222-2222-2222-2222-222222222222", chemist.BedGuid);
+        Assert.Empty(chemist.StationGuids);
+    }
+
+    [Theory]
+    [InlineData("BotanistData", "Botanist")]
+    [InlineData("ChemistData", "Chemist")]
+    [InlineData("CleanerData", "Cleaner")]
+    [InlineData("PackagerData", "Packager")]
+    public void Known_employee_data_type_maps_to_its_identity(string dataType, string identity)
+    {
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+        var json = NativePropertyJsonWithEmployees(EmployeeRecordJson(dataType, "55555555-5555-5555-5555-555555555555"));
+
+        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(json), out var snapshot, out var failureReason, out _), failureReason);
+
+        var employee = Assert.Single(snapshot.Employees);
+        Assert.Equal(dataType, employee.DataType);
+        Assert.Equal(identity, employee.Identity);
+    }
+
+    [Fact]
+    public void Unknown_employee_data_type_loads_with_itself_as_identity_and_keeps_the_rest()
+    {
+        // HandlerData: EEmployeeType names a Handler but the game ships no
+        // HandlerData, so OC treats it as unknown: loadable, kept with its
+        // raw JSON, and preserved as unsupported downstream.
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+        var json = NativePropertyJsonWithEmployees(
+            EmployeeRecordJson("PackagerData", "66666666-6666-6666-6666-666666666666"),
+            EmployeeRecordJson("HandlerData", "77777777-7777-7777-7777-777777777777"));
+
+        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(json), out var snapshot, out var failureReason, out _), failureReason);
+
+        Assert.Equal(2, snapshot.Employees.Count);
+        Assert.Equal("Packager", snapshot.Employees[0].Identity);
+        Assert.Equal("HandlerData", snapshot.Employees[1].DataType);
+        Assert.Equal("HandlerData", snapshot.Employees[1].Identity);
+        Assert.Contains("77777777-7777-7777-7777-777777777777", snapshot.Employees[1].RawJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Inspector_reads_live_packager_schema_with_configuration_fallbacks_without_changing_raw_bytes()
     {
         var inspector = new FishWarehouseNativePropertySnapshotInspector();
 
-        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(LiveNativePropertyJson), out var snapshot, out var failureReason), failureReason);
+        Assert.True(inspector.TryInspect(Encoding.UTF8.GetBytes(LiveNativePropertyJson), out var snapshot, out var failureReason, out _), failureReason);
 
         var employee = Assert.Single(snapshot.Employees);
         Assert.Equal("packager-employee-guid", employee.Guid);
@@ -127,7 +194,8 @@ public sealed class FishWarehouseNativePropertySnapshotInspectorTests
         var inspected = inspector.TryInspect(
             Encoding.UTF8.GetBytes(invalidIdentityJson),
             out _,
-            out var failureReason);
+            out var failureReason,
+            out _);
 
         Assert.False(inspected);
         Assert.Contains("Identity", failureReason, StringComparison.Ordinal);
@@ -145,11 +213,161 @@ public sealed class FishWarehouseNativePropertySnapshotInspectorTests
         var inspected = inspector.TryInspect(
             Encoding.UTF8.GetBytes(noHomeJson),
             out var snapshot,
-            out var failureReason);
+            out var failureReason,
+            out _);
 
         Assert.True(inspected, failureReason);
         Assert.Empty(snapshot.Employees[0].BedGuid);
     }
+
+    [Fact]
+    public void Employee_without_a_bed_section_inspects_as_unassigned()
+    {
+        var json = GaryPropertyJson.Replace(
+            "\"Bed\":{\"ObjectGUID\":\"df416556-9780-4c63-9de2-4e265315c5e7\"},",
+            string.Empty,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Bed\"", json, StringComparison.Ordinal);
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+
+        var inspected = inspector.TryInspect(Encoding.UTF8.GetBytes(json), out var snapshot, out var failureReason, out _);
+
+        Assert.True(inspected, failureReason);
+        Assert.Empty(snapshot.Employees[0].BedGuid);
+    }
+
+    [Fact]
+    public void Employee_without_a_configuration_entry_inspects_as_unassigned()
+    {
+        var json = GaryPropertyJson.Replace(
+            "{\"Name\":\"Configuration\",\"Contents\":{\"Bed\":{\"ObjectGUID\":\"df416556-9780-4c63-9de2-4e265315c5e7\"},\"Stations\":{\"ObjectGUIDs\":[]}}}",
+            "{\"Name\":\"Relationship\",\"Contents\":{\"RelationDelta\":0}}",
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Configuration\"", json, StringComparison.Ordinal);
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+
+        var inspected = inspector.TryInspect(Encoding.UTF8.GetBytes(json), out var snapshot, out var failureReason, out _);
+
+        Assert.True(inspected, failureReason);
+        Assert.Empty(snapshot.Employees[0].BedGuid);
+        Assert.Empty(snapshot.Employees[0].StationGuids);
+    }
+
+    [Fact]
+    public void Employee_without_a_stations_section_inspects_with_no_stations()
+    {
+        var json = GaryPropertyJson.Replace(
+            ",\"Stations\":{\"ObjectGUIDs\":[]}",
+            string.Empty,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Stations", json, StringComparison.Ordinal);
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+
+        var inspected = inspector.TryInspect(Encoding.UTF8.GetBytes(json), out var snapshot, out var failureReason, out _);
+
+        Assert.True(inspected, failureReason);
+        Assert.Empty(snapshot.Employees[0].StationGuids);
+        Assert.Equal("df416556-9780-4c63-9de2-4e265315c5e7", snapshot.Employees[0].BedGuid);
+    }
+
+    [Fact]
+    public void Employee_without_paid_for_today_fails_naming_the_field()
+    {
+        var json = GaryPropertyJson.Replace(
+            ",\"PaidForToday\":false",
+            string.Empty,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("PaidForToday", json, StringComparison.Ordinal);
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+
+        var inspected = inspector.TryInspect(Encoding.UTF8.GetBytes(json), out _, out var failureReason, out _);
+
+        Assert.False(inspected);
+        Assert.Contains("PaidForToday", failureReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Locker_without_load_order_fails_naming_the_field()
+    {
+        var json = GaryPropertyJson.Replace(
+            "\"LoadOrder\":1,",
+            string.Empty,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadOrder", json, StringComparison.Ordinal);
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+
+        var inspected = inspector.TryInspect(Encoding.UTF8.GetBytes(json), out _, out var failureReason, out _);
+
+        Assert.False(inspected);
+        Assert.Contains("LoadOrder", failureReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Locker_without_item_id_fails_naming_the_field()
+    {
+        var json = GaryPropertyJson.Replace(
+            "\"ItemString\":{\"ID\":\"locker\"}",
+            "\"ItemString\":{}",
+            StringComparison.Ordinal);
+        var inspector = new FishWarehouseNativePropertySnapshotInspector();
+
+        var inspected = inspector.TryInspect(Encoding.UTF8.GetBytes(json), out _, out var failureReason, out _);
+
+        Assert.False(inspected);
+        Assert.Contains("ID", failureReason, StringComparison.Ordinal);
+    }
+
+    // Gary Pinkman with a player-placed locker, shaped like the kept
+    // SaveGame_5 post-recovery PackagerData record (string-wrapped BaseData
+    // and Contents flattened to objects; the inspector accepts both).
+    private const string GaryPropertyJson = """
+        {
+          "PropertyCode": "oc_fishwarehouse",
+          "IsOwned": true,
+          "Objects": [
+            {"GUID":"df416556-9780-4c63-9de2-4e265315c5e7","GridGUID":"d8b7d799-90f2-413c-83d3-6adcbec07f0b","LoadOrder":1,"ItemString":{"ID":"locker"}}
+          ],
+          "Employees": [
+            {"DataType":"PackagerData","BaseData":{"ID":"gary_pinkman","FirstName":"Gary","LastName":"Pinkman","GUID":"854a259d-5b33-4577-8ac7-ede95f89302f","AssignedProperty":"oc_fishwarehouse","PaidForToday":false},"AdditionalDatas":[{"Name":"Relationship","Contents":{"RelationDelta":0}},{"Name":"Configuration","Contents":{"Bed":{"ObjectGUID":"df416556-9780-4c63-9de2-4e265315c5e7"},"Stations":{"ObjectGUIDs":[]}}}]}
+          ]
+        }
+        """;
+
+    private static string NativePropertyJsonWithEmployees(params string[] records) =>
+        """
+        {
+          "PropertyCode": "oc_fishwarehouse",
+          "IsOwned": true,
+          "Objects": [],
+          "Employees": [
+        """ + "    " + string.Join(",\n    ", records) + """
+          ]
+        }
+        """;
+
+    private static string EmployeeRecordJson(string dataType, string guid) =>
+        $$"""{"DataType":"{{dataType}}","BaseData":{"GUID":"{{guid}}","PaidForToday":false},"AdditionalDatas":[]}""";
+
+    // Sanitized transcription of the preserved OC-128 failing file
+    // (fish-warehouse.failed-inspection.20260930-011500-630.json): the 0.4.7
+    // wrapped shape, a PlaceableStorageData locker plus one ChemistData
+    // employee with no Identity key. GUIDs, names and positions are
+    // synthetic; the key sets and nesting match the original.
+    private const string ChemistWrappedNativePropertyJson = """
+        {
+          "DataType": "PropertyData",
+          "DataVersion": 0,
+          "GameVersion": "0.4.7f6",
+          "PropertyCode": "oc_fishwarehouse",
+          "IsOwned": true,
+          "Employees": [
+            {"DataType":"ChemistData","DataVersion":0,"GameVersion":"0.4.7f6","BaseData":"{\"DataType\":\"ChemistData\",\"DataVersion\":0,\"GameVersion\":\"0.4.7f6\",\"ID\":\"test_chemist\",\"AssignedProperty\":\"oc_fishwarehouse\",\"FirstName\":\"Test\",\"LastName\":\"Chemist\",\"IsMale\":true,\"AppearanceIndex\":6,\"Position\":{\"x\":1,\"y\":2,\"z\":3},\"Rotation\":{\"x\":0,\"y\":0,\"z\":0,\"w\":1},\"GUID\":\"11111111-1111-1111-1111-111111111111\",\"PaidForToday\":false,\"MoveItemData\":{\"TemplateItemJSON\":\"\",\"GrabbedItemQuantity\":0,\"SourceGUID\":\"\",\"DestinationGUID\":\"\"}}","AdditionalDatas":[{"Name":"Relationship","Contents":"{\"RelationDelta\":0}"},{"Name":"Configuration","Contents":"{\"DataType\":\"ChemistConfigurationData\",\"Bed\":{\"ObjectGUID\":\"22222222-2222-2222-2222-222222222222\"},\"Stations\":{\"ObjectGUIDs\":[]}}"}]}
+          ],
+          "Objects": [
+            {"DataType":"PlaceableStorageData","DataVersion":0,"GameVersion":"0.4.7f6","BaseData":"{\"DataType\":\"PlaceableStorageData\",\"DataVersion\":0,\"GameVersion\":\"0.4.7f6\",\"GUID\":\"22222222-2222-2222-2222-222222222222\",\"ItemString\":\"{\\\"ID\\\":\\\"locker\\\"}\",\"LoadOrder\":0,\"GridGUID\":\"33333333-3333-3333-3333-333333333333\"}","AdditionalDatas":[]}
+          ]
+        }
+        """;
 
     private const string MeasuredNativePropertyJson = """
         {

@@ -2,6 +2,7 @@ using Il2CppFishNet;
 using Il2CppFishNet.Object;
 using Il2CppScheduleOne.Property;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 using UnityEngine;
 
 namespace OrganizedCrime.Runtime;
@@ -34,7 +35,7 @@ public static class RuntimePropertyReadiness
         var serverManager = InstanceFinder.ServerManager;
         return networkObject?.NetworkManager is not null &&
             serverManager is not null &&
-            Read(() => serverManager.OneServerStarted());
+            Read(() => FishNetHostGate.IsStartedOrFalse(serverManager));
     }
 
     private static bool FindAnchor(string path)

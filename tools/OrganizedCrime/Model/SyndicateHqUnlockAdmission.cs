@@ -1,5 +1,3 @@
-using OrganizedCrime.Runtime;
-
 namespace OrganizedCrime.Model;
 
 public sealed record SyndicateHqUnlockDecision(bool IsUnlocked, string Reason)
@@ -20,8 +18,8 @@ public static class SyndicateHqUnlockAdmission
         if (contextStatus != Release1StoryHostContextReadStatus.Ready || context is null)
             return SyndicateHqUnlockDecision.Locked("Canonical host authority was not ready.");
         var currentContext = context.Value;
-        if (!LocalPressureHostLifecyclePolicies.IsCanonicalPlayerIdentity(currentContext.PlayerId) ||
-            !LocalPressureHostLifecyclePolicies.TryGetCanonicalHostIdentity(currentContext.ActiveSaveFolder, out var saveIdentity) ||
+        if (!LocalPressureHostIdentity.IsCanonicalPlayerIdentity(currentContext.PlayerId) ||
+            !LocalPressureHostIdentity.TryGetCanonicalHostIdentity(currentContext.ActiveSaveFolder, out var saveIdentity) ||
             !string.Equals(saveIdentity, currentContext.PlayerId, StringComparison.Ordinal))
             return SyndicateHqUnlockDecision.Locked("Canonical save-account identity did not match the host identity.");
         if (story is null || !string.Equals(story.PlayerId, currentContext.PlayerId, StringComparison.Ordinal))

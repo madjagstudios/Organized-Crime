@@ -1,3 +1,5 @@
+using OrganizedCrime.Model;
+
 namespace OrganizedCrime.Runtime;
 
 public enum Release1CartelStatus

@@ -125,7 +125,10 @@ public sealed class FishWarehousePropertyReplayHost
             restored.Count,
             _loadedPayloadIndexes.Count,
             null);
-        _log($"Fish Warehouse native replay summary: {Result.ResolvedObjectCount}/{Result.ExpectedObjectCount} resolved, loaded={Result.LoadedObjectCount}.");
+        var replaySummary = $"Fish Warehouse native replay summary: {Result.ResolvedObjectCount}/{Result.ExpectedObjectCount} resolved, loaded={Result.LoadedObjectCount}.";
+        // A partial replay is actionable; only a complete one is routine.
+        if (Result.ResolvedObjectCount == Result.ExpectedObjectCount) OrganizedCrimeLog.Diagnostic(replaySummary, _log);
+        else _log(replaySummary);
         return Result;
     }
 

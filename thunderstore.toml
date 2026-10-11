@@ -8,14 +8,14 @@ schemaVersion = "0.0.1"
 [package]
 namespace = "MadJagStudios"
 name = "OrganizedCrime"
-versionNumber = "1.0.1"
-description = "End game story-line expansion. Nell Grey offers you six jobs, Arthur Selby calls when you fail them, and Chief Campbell wants paying to lose your file. Earn a hidden HQ, keep the heat down, or watch the town go to curfew because of you."
+versionNumber = "2.0.0"
+description = "End game story-line expansion. Work for the Cheeky Blinders: run Nell's jobs, owe Arthur when you fail, buy the family's Syndicate Warehouse on the docks, and face police checkpoints, sweeps and raids, or pay the Chief to look away."
 websiteUrl = "https://github.com/madjagstudios/Organized-Crime"
 containsNsfwContent = false
 
 [package.dependencies]
 LavaGang-MelonLoader = "0.7.3"
-ifBars-S1API_Forked = "3.2.0"
+ifBars-S1API_Forked = "3.2.1"
 
 [build]
 icon = "packaging/thunderstore/icon.png"

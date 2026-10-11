@@ -4,8 +4,10 @@ using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.PlayerScripts;
 using MelonLoader;
+using OrganizedCrime.Runtime.Platform;
 using S1API.Lifecycle;
 using UnityEngine;
+using S1TimeManager = S1API.GameTime.TimeManager;
 
 namespace OrganizedCrime.Runtime;
 
@@ -15,7 +17,7 @@ public sealed class LocalPressureHostLifecycleAdapter : ILocalPressureRuntimeHos
     private readonly LocalPressureHostLifecycleBindingState _timeBindingState = new();
     private TimeManager? _timeManager;
     private Il2CppSystem.Action? _hourPassHandler;
-    private Il2CppSystem.Action? _sleepEndHandler;
+    private Action<int>? _sleepEndHandler;
     private bool _lifecycleSubscribed;
     private bool _timeEventsSubscribed;
     private bool _timeBindingDiagnosticIssued;
@@ -26,7 +28,7 @@ public sealed class LocalPressureHostLifecycleAdapter : ILocalPressureRuntimeHos
 
     public LocalPressureHostLifecycleAdapter(Action<string>? log = null)
     {
-        _log = log ?? (message => MelonLogger.Warning($"[Organized Crime] {message}"));
+        _log = log ?? OrganizedCrimeLog.Warning;
         SubscribeLifecycleEvents();
     }
 
@@ -39,7 +41,7 @@ public sealed class LocalPressureHostLifecycleAdapter : ILocalPressureRuntimeHos
             if (serverManager is null || clientManager is null)
                 return LocalPressureHostAuthorityReadStatus.Pending;
 
-            var serverStarted = serverManager.OneServerStarted();
+            var serverStarted = FishNetHostGate.IsStarted(serverManager);
             var clientStarted = clientManager.Started;
             if (!serverStarted && !clientStarted)
                 return LocalPressureHostAuthorityReadStatus.Pending;
@@ -245,7 +247,7 @@ public sealed class LocalPressureHostLifecycleAdapter : ILocalPressureRuntimeHos
             if (timeManager is null)
                 return false;
 
-            sleepInProgress = timeManager.IsSleepInProgress;
+            sleepInProgress = S1TimeManager.SleepInProgress;
             return true;
         }
         catch (Exception exception)
@@ -302,10 +304,12 @@ public sealed class LocalPressureHostLifecycleAdapter : ILocalPressureRuntimeHos
 
             _timeManager = timeManager;
             _hourPassHandler = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new Action(HandleHourPass));
-            _sleepEndHandler = DelegateSupport.ConvertDelegate<Il2CppSystem.Action>(new Action(HandleSleepEnd));
+            _sleepEndHandler = _ => HandleSleepEnd();
             _timeEventsSubscribed = true;
             _timeManager.onHourPass += _hourPassHandler;
-            _timeManager.onSleepEnd += _sleepEndHandler;
+            // S1TimeManager.OnSleepEnd is static and global, so remove before re-adding to avoid a double subscription.
+            S1TimeManager.OnSleepEnd = (S1TimeManager.OnSleepEnd - _sleepEndHandler) ?? new Action<int>(_ => { });
+            S1TimeManager.OnSleepEnd += _sleepEndHandler;
             _timeBindingState.MarkBound(timeManager);
             return LocalPressureClockBoundaryBindingStatus.Ready;
         }
@@ -340,16 +344,17 @@ public sealed class LocalPressureHostLifecycleAdapter : ILocalPressureRuntimeHos
             {
                 _log($"Local Pressure hour-event unsubscription failed: {exception.GetType().Name}: {exception.Message}");
             }
+        }
 
-            try
-            {
-                if (_sleepEndHandler is not null)
-                    timeManager.onSleepEnd -= _sleepEndHandler;
-            }
-            catch (Exception exception)
-            {
-                _log($"Local Pressure sleep-event unsubscription failed: {exception.GetType().Name}: {exception.Message}");
-            }
+        // S1TimeManager.OnSleepEnd outlives any native instance, so unsubscribe regardless of the binding above.
+        try
+        {
+            if (_sleepEndHandler is not null)
+                S1TimeManager.OnSleepEnd = (S1TimeManager.OnSleepEnd - _sleepEndHandler) ?? new Action<int>(_ => { });
+        }
+        catch (Exception exception)
+        {
+            _log($"Local Pressure sleep-event unsubscription failed: {exception.GetType().Name}: {exception.Message}");
         }
 
         _timeManager = null;

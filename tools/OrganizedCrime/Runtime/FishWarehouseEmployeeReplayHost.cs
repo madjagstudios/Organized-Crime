@@ -1,24 +1,7 @@
+using OrganizedCrime.Model;
 using OrganizedCrime.Persistence;
 
 namespace OrganizedCrime.Runtime;
-
-public enum FishWarehouseEmployeeReplayState
-{
-    Pending,
-    Succeeded,
-    Failed
-}
-
-public sealed record FishWarehouseEmployeeReplayResult(
-    FishWarehouseEmployeeReplayState State,
-    int CapturedEmployeeCount,
-    int SupportedCapturedEmployeeCount,
-    int ReplayedEmployeeCount,
-    IReadOnlyList<FishWarehouseUnsupportedEmployeeRecord> UnsupportedEmployees,
-    bool CanAdvanceEmployeesReplayed,
-    string? PrimaryFailureReason,
-    string? FailureReason,
-    IReadOnlyList<string>? InventoryRestoredEmployeeGuids = null);
 
 public sealed class FishWarehouseEmployeeReplayHost
 {
@@ -107,6 +90,12 @@ public sealed class FishWarehouseEmployeeReplayHost
             if (registered)
             {
                 entry.Stage = ReplayStage.PrimaryVerification;
+            }
+            else if (entry.Descriptor.RequiresFallbackCreation)
+            {
+                // Preserved records have no typed payload: the registry loader
+                // can never load them, so go straight to fallback creation.
+                return StartFallback(entry, expected, now);
             }
             else
             {
@@ -313,6 +302,7 @@ public sealed class FishWarehouseEmployeeReplayHost
         if (expected.MoveItem != actual.MoveItem) return "move-item-mismatch";
         if (!SameGuid(expected.HomeGuid, actual.HomeGuid)) return "home-mismatch";
         if (!SameGuidSet(expected.StationGuids, actual.StationGuids)) return "stations-mismatch";
+        if (!SameGuid(expected.SuppliesGuid, actual.SuppliesGuid)) return "supplies-mismatch";
         return null;
     }
 
@@ -369,6 +359,17 @@ public sealed class FishWarehouseEmployeeReplayHost
         foreach (var entry in _entries.Where(entry => !entry.IsReplayed && !entry.Descriptor.IsSupportedPackager))
             Preserve(entry, "replay did not complete");
 
+        // Unverified preserved records stay preserved even on failure, so a
+        // failed replay never drops the sidecar's only copy of an employee.
+        foreach (var entry in _entries.Where(entry => !entry.IsReplayed && entry.Descriptor.RequiresFallbackCreation))
+            _unsupportedByGuid.TryAdd(
+                entry.Descriptor.Guid,
+                new FishWarehouseUnsupportedEmployeeRecord(
+                    entry.Descriptor.Guid,
+                    entry.Descriptor.DataType,
+                    entry.Descriptor.Identity,
+                    entry.Descriptor.RawJson));
+
         return Result = BuildResult(FishWarehouseEmployeeReplayState.Failed, reason);
     }
 
@@ -376,6 +377,10 @@ public sealed class FishWarehouseEmployeeReplayHost
     {
         var supportedCount = _entries.Count(entry => entry.Descriptor.IsSupportedPackager);
         var replayedCount = _entries.Count(entry => entry.IsReplayed);
+        var replayedByIdentity = _entries
+            .Where(entry => entry.IsReplayed)
+            .GroupBy(entry => entry.Descriptor.Identity, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         var primaryFailure = _entries.Select(entry => entry.PrimaryFailureReason).FirstOrDefault(reason => reason is not null);
         return new FishWarehouseEmployeeReplayResult(
             state,
@@ -386,7 +391,8 @@ public sealed class FishWarehouseEmployeeReplayHost
             state == FishWarehouseEmployeeReplayState.Succeeded && replayedCount == supportedCount,
             primaryFailure,
             failureReason,
-            _adapter.InventoryRestoredEmployeeGuids.ToArray());
+            _adapter.InventoryRestoredEmployeeGuids.ToArray(),
+            replayedByIdentity);
     }
 
     private enum ReplayStage

@@ -1,3 +1,5 @@
+using OrganizedCrime.Core.Persistence;
+
 namespace OrganizedCrime.Persistence;
 
 public enum LocalPressureSavePathFailureReason
@@ -7,10 +9,7 @@ public enum LocalPressureSavePathFailureReason
     InvalidActiveSaveFolder
 }
 
-public sealed record LocalPressureSavePathResult(
-    bool Succeeded,
-    LocalPressureSavePathFailureReason Reason,
-    string Message)
+public sealed record LocalPressureSavePathResult(bool Succeeded, LocalPressureSavePathFailureReason Reason, string Message)
 {
     public static LocalPressureSavePathResult Success() =>
         new(true, LocalPressureSavePathFailureReason.None, string.Empty);
@@ -21,52 +20,37 @@ public sealed record LocalPressureSavePathResult(
 
 public sealed class LocalPressureSavePath
 {
-    private LocalPressureSavePath(string activeSaveFolder)
+    private LocalPressureSavePath(SidecarPath inner)
     {
-        ActiveSaveFolder = activeSaveFolder;
-        SidecarDirectory = Path.Combine(activeSaveFolder, "OrganizedCrime");
-        SidecarFilePath = Path.Combine(SidecarDirectory, "local-pressure.json");
+        Inner = inner;
     }
 
-    public string ActiveSaveFolder { get; }
-    public string SidecarDirectory { get; }
-    public string SidecarFilePath { get; }
+    public string ActiveSaveFolder => Inner.ActiveSaveFolder;
+    public string SidecarDirectory => Inner.SidecarDirectory;
+    public string SidecarFilePath => Inner.SidecarFilePath;
+    internal SidecarPath Inner { get; }
 
     public static bool TryCreate(
-        string? activeSaveFolder,
+        string? folder,
         out LocalPressureSavePath? path,
         out LocalPressureSavePathResult result)
     {
         path = null;
-        if (string.IsNullOrWhiteSpace(activeSaveFolder))
+        if (!SidecarPath.TryValidate(folder, "local-pressure.json", SidecarPathWording.ScheduleI, out var validated, out var failure))
         {
-            result = LocalPressureSavePathResult.Failure(
-                LocalPressureSavePathFailureReason.InvalidActiveSaveFolder,
-                "Active Schedule I save folder was empty.");
+            result = LocalPressureSavePathResult.Failure(Map(failure.Reason), failure.Message);
             return false;
         }
 
-        try
-        {
-            var fullPath = Path.GetFullPath(activeSaveFolder.Trim());
-            if (!Directory.Exists(fullPath))
-            {
-                result = LocalPressureSavePathResult.Failure(
-                    LocalPressureSavePathFailureReason.ActiveSaveFolderMissing,
-                    $"Active Schedule I save folder did not exist: {fullPath}");
-                return false;
-            }
-
-            path = new LocalPressureSavePath(fullPath);
-            result = LocalPressureSavePathResult.Success();
-            return true;
-        }
-        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            result = LocalPressureSavePathResult.Failure(
-                LocalPressureSavePathFailureReason.InvalidActiveSaveFolder,
-                $"Active Schedule I save folder could not be resolved: {ex.Message}");
-            return false;
-        }
+        path = new LocalPressureSavePath(validated!);
+        result = LocalPressureSavePathResult.Success();
+        return true;
     }
+
+    private static LocalPressureSavePathFailureReason Map(SidecarPathFailureReason reason) => reason switch
+    {
+        SidecarPathFailureReason.Missing => LocalPressureSavePathFailureReason.ActiveSaveFolderMissing,
+        SidecarPathFailureReason.Empty or SidecarPathFailureReason.Unresolvable => LocalPressureSavePathFailureReason.InvalidActiveSaveFolder,
+        _ => LocalPressureSavePathFailureReason.None,
+    };
 }

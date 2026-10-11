@@ -1,8 +1,44 @@
 using System.Globalization;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.PlayerScripts;
+using OrganizedCrime.Runtime.Police;
 
 namespace OrganizedCrime.Runtime;
+
+// Shared by preflight/outcome snapshots and the final native pick guard.
+internal sealed class OcNativeDispatchPoolGuard
+{
+    private IOcOfficerPoolRecoveryWorld? _pools;
+    internal void Configure(IOcOfficerPoolRecoveryWorld? pools) => _pools = pools;
+
+    internal IReadOnlyList<string> ReadEligible<T>(int count, Func<int, T?> read,
+        Func<T, long> pointer, Func<T, string> identity) where T : class
+    {
+        var eligible = new List<string>();
+        for (var i = 0; i < count; i++)
+        {
+            var officer = read(i);
+            if (officer is not null && !(_pools?.IsOwnedOfficer(pointer(officer)) ?? false))
+                eligible.Add(identity(officer));
+        }
+        return eligible;
+    }
+
+    internal void Dispatch<T>(Func<int> count, Func<int, T?> read,
+        Func<T, long> pointer, Action dispatch) where T : class
+    {
+        _pools?.PollOfficerPools();
+        // Native Dispatch chooses from its real pool, not our filtered snapshot.
+        // If sweep/removal failed, refuse rather than expose an owned clone to it.
+        for (var i = 0; i < count(); i++)
+        {
+            var officer = read(i);
+            if (officer is not null && (_pools?.IsOwnedOfficer(pointer(officer)) ?? false))
+                throw new InvalidOperationException("OC-owned officer remains in native dispatch pool.");
+        }
+        dispatch();
+    }
+}
 
 internal interface INativePoliceDispatchBoundary
 {
@@ -21,6 +57,7 @@ internal interface INativePoliceDispatchBoundary
 
 internal sealed class NativePoliceDispatchBoundary : INativePoliceDispatchBoundary
 {
+    internal readonly OcNativeDispatchPoolGuard PoolGuard = new();
     public bool IsMorePatrolsPresent() =>
         AppDomain.CurrentDomain.GetAssemblies().Any(assembly =>
             string.Equals(assembly.GetName().Name, "MorePatrols", StringComparison.OrdinalIgnoreCase));
@@ -76,16 +113,13 @@ internal sealed class NativePoliceDispatchBoundary : INativePoliceDispatchBounda
         try
         {
             var station = (PoliceStation)stationHandle;
-            var officers = new List<string>();
             var pool = station.OfficerPool;
             if (pool is null)
                 return false;
 
-            foreach (var officer in pool)
-            {
-                if (officer is not null)
-                    officers.Add(officer.GetInstanceID().ToString(CultureInfo.InvariantCulture));
-            }
+            var officers = PoolGuard.ReadEligible(pool.Count, i => pool[i],
+                officer => officer.Pointer.ToInt64(),
+                officer => officer.GetInstanceID().ToString(CultureInfo.InvariantCulture));
 
             snapshot = new NativeDispatchStationSnapshot(
                 station.GetInstanceID().ToString(CultureInfo.InvariantCulture),
@@ -104,7 +138,9 @@ internal sealed class NativePoliceDispatchBoundary : INativePoliceDispatchBounda
     {
         var station = (PoliceStation)stationHandle;
         var canonicalTarget = (Player)canonicalTargetHandle;
-        station.Dispatch(2, canonicalTarget, PoliceStation.EDispatchType.UseVehicle, false);
+        PoolGuard.Dispatch(() => station.OfficerPool.Count, i => station.OfficerPool[i],
+            officer => officer.Pointer.ToInt64(),
+            () => { station.Dispatch(2, canonicalTarget, PoliceStation.EDispatchType.UseVehicle, false); });
     }
 }
 
@@ -130,6 +166,12 @@ public sealed class NativePoliceDispatchAdapter : INativeLawResponseAdapter
         _runtimeHost = runtimeHost ?? throw new ArgumentNullException(nameof(runtimeHost));
         _nativeBoundary = nativeBoundary ?? throw new ArgumentNullException(nameof(nativeBoundary));
         _log = log ?? (_ => { });
+    }
+
+    internal void ConfigureOfficerPools(IOcOfficerPoolRecoveryWorld? pools)
+    {
+        if (_nativeBoundary is NativePoliceDispatchBoundary native)
+            native.PoolGuard.Configure(pools);
     }
 
     public NativeLawResponseResult TryRequest(NativeLawResponseRequest request)

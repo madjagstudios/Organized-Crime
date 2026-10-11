@@ -57,7 +57,7 @@ public static class LocalPressureTransitions
             PlayerId: evidence.PlayerId ?? state.PlayerId,
             Region: evidence.Region ?? state.Region,
             PropertyCode: evidence.PropertyCode ?? state.PropertyCode,
-            Revision: checked(state.Revision + 1));
+            Revision: checked(state.Revision + 1)) { LastAppliedRaidCoolingId = state.LastAppliedRaidCoolingId };
 
         return new LocalPressureTransitionResult(
             resultState,
@@ -71,7 +71,7 @@ public static class LocalPressureTransitions
     /// OC-73 spec decision 15. The one validated way Chief Campbell's payment clears the ledger:
     /// Local Heat to zero, Known Offender false, evidence time, quiet grace and the last decay
     /// evaluation preserved exactly, identity and presentation context preserved exactly, revision
-    /// incremented. No new persisted field, so the Local Pressure sidecar schema stays at version 1.
+    /// incremented. This operation adds no persisted fields; it retains the raid cooling marker.
     /// Clearing Known Offender is what actually matters: while it is true the decay floor is the
     /// profile's KnownOffenderFloor (25 on Moderate), so heat can never fall out of Noticed on its own.
     /// </summary>
@@ -89,9 +89,19 @@ public static class LocalPressureTransitions
             PlayerId: state.PlayerId,
             Region: state.Region,
             PropertyCode: state.PropertyCode,
-            Revision: checked(state.Revision + 1));
+            Revision: checked(state.Revision + 1)) { LastAppliedRaidCoolingId = state.LastAppliedRaidCoolingId };
         return new LocalPressureRecordWipeResult(
             wiped, LocalPressureProfile.MinimumHeat - state.LocalHeat, previousTier, GetTier(wiped.LocalHeat, profile));
+    }
+
+    internal static LocalPressureState ApplyRaidCooling(LocalPressureState state, LocalPressureProfile profile, string raidId)
+    {
+        if (string.IsNullOrWhiteSpace(raidId)) throw new ArgumentException("Raid cooling requires an id.", nameof(raidId));
+        if (state.LastAppliedRaidCoolingId == raidId) return state;
+        return new LocalPressureState(Math.Min(state.LocalHeat, profile.WatchedUpperBound), state.KnownOffender,
+            state.LastEvidenceGameTime, state.QuietGraceUntil, state.LastDecayEvaluation,
+            state.PlayerId, state.Region, state.PropertyCode, checked(state.Revision + 1))
+        { LastAppliedRaidCoolingId = raidId };
     }
 
     public static LocalPressureTier GetTier(int heat, LocalPressureProfile profile)

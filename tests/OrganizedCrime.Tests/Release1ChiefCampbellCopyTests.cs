@@ -16,15 +16,15 @@ public sealed class Release1ChiefCampbellCopyTests
     }
 
     [Theory]
-    [InlineData(0, 15000, "15000")] [InlineData(1, 15000, "15000")] [InlineData(2, 20000, "20000")]
-    [InlineData(3, 25000, "25000")] [InlineData(4, 25000, "25000")] [InlineData(99, 25000, "25000")]
-    public void The_ladder_is_fifteen_then_twenty_then_twenty_five_thousand_and_caps(int round, int expected, string rendered)
+    [InlineData(0, 25000, "25000")] [InlineData(1, 25000, "25000")] [InlineData(2, 30000, "30000")]
+    [InlineData(3, 35000, "35000")] [InlineData(4, 35000, "35000")] [InlineData(99, 35000, "35000")]
+    public void The_ladder_is_twenty_five_then_thirty_then_thirty_five_thousand_and_caps(int round, int expected, string rendered)
     {
         Assert.Equal(expected, Release1ChiefCampbellCopy.DemandFor(round));
         Assert.Equal(rendered, Release1ChiefCampbellCopy.Dollars(expected));
-        Assert.Equal(15000, Release1ChiefCampbellCopy.FirstDemand);
-        Assert.Equal(20000, Release1ChiefCampbellCopy.SecondDemand);
-        Assert.Equal(25000, Release1ChiefCampbellCopy.ThirdDemand);
+        Assert.Equal(25000, Release1ChiefCampbellCopy.FirstDemand);
+        Assert.Equal(30000, Release1ChiefCampbellCopy.SecondDemand);
+        Assert.Equal(35000, Release1ChiefCampbellCopy.ThirdDemand);
     }
 
     // One Assert.Equal per row of the spec's Messages, Decision options and Status tables, each
@@ -34,15 +34,15 @@ public sealed class Release1ChiefCampbellCopyTests
     [Fact]
     public void Every_string_reads_exactly_as_the_spec_wrote_it()
     {
-        Assert.Equal("This is Chief Campbell of the Hyland Point police. Your file is on my desk. Prints, statements, an arrest record with your name on it. Fifteen thousand in cash and the file is gone.", Release1ChiefCampbellCopy.DemandText(1));
+        Assert.Equal("This is Chief Campbell of the Hyland Point police. Your file is on my desk. Prints, statements, an arrest record with your name on it. Twenty five thousand in cash and the file is gone.", Release1ChiefCampbellCopy.DemandText(1));
         Assert.Equal(Release1ChiefCampbellCopy.SecondDemandText, Release1ChiefCampbellCopy.DemandText(2));
         Assert.Equal(Release1ChiefCampbellCopy.ThirdDemandText, Release1ChiefCampbellCopy.DemandText(3));
         Assert.Equal(Release1ChiefCampbellCopy.DemandText(3), Release1ChiefCampbellCopy.DemandText(4));
-        Assert.Equal("Chief Campbell again. My officers booked you in, so the file is thicker and the price is twenty thousand.", Release1ChiefCampbellCopy.SecondDemandText);
-        Assert.Equal("Chief Campbell. Twenty five thousand. That is the last number I write down. It does not rise again and it does not go away.", Release1ChiefCampbellCopy.ThirdDemandText);
-        Assert.Equal("You are short. The number is 20000 in cash, in hand. Come back when you have it.", Release1ChiefCampbellCopy.ShortCashText(20000));
-        Assert.Equal("Pay 15000", Release1ChiefCampbellCopy.PayLabel(15000));
+        Assert.Equal("Chief Campbell again. My officers booked you in, so the file is thicker and the price is thirty thousand.", Release1ChiefCampbellCopy.SecondDemandText);
+        Assert.Equal("Chief Campbell. Thirty five thousand. That is the last number I write down. It does not rise again and it does not go away.", Release1ChiefCampbellCopy.ThirdDemandText);
+        Assert.Equal("You are short. The number is 30000 in cash, in hand. Come back when you have it.", Release1ChiefCampbellCopy.ShortCashText(30000));
         Assert.Equal("Pay 25000", Release1ChiefCampbellCopy.PayLabel(25000));
+        Assert.Equal("Pay 35000", Release1ChiefCampbellCopy.PayLabel(35000));
         Assert.Equal("Not today", Release1ChiefCampbellCopy.DeclineLabel);
         // The eight fixed strings with no substitution are pinned the same way, one Assert.Equal each,
         // against DeclineReplyText, PaidText, WatchListText, LockdownAnnouncementText, LiftPaidText,
@@ -55,6 +55,7 @@ public sealed class Release1ChiefCampbellCopyTests
         Assert.Equal("Curfew is lifted. Consider the account settled.", Release1ChiefCampbellCopy.LiftPaidText);
         Assert.Equal("Curfew is lifted. You went quiet long enough. The file is still on my desk.", Release1ChiefCampbellCopy.LiftCooledText);
         Assert.Equal("Your payment could not be confirmed. The demand still stands.", Release1ChiefCampbellCopy.PaymentBlockedText);
+        Assert.Equal("A full day and you still haven't paid. Get caught out after curfew and my officers come for you.", Release1ChiefCampbellCopy.ForcedWantedWarningText);
     }
 
     // One AssertPlayerCopy call per entry of a sixteen element array literal holding every player
@@ -74,21 +75,40 @@ public sealed class Release1ChiefCampbellCopyTests
             Release1ChiefCampbellCopy.DemandText(2),
             Release1ChiefCampbellCopy.DemandText(3),
             Release1ChiefCampbellCopy.DeclineReplyText,
-            Release1ChiefCampbellCopy.ShortCashText(20000),
+            Release1ChiefCampbellCopy.ShortCashText(30000),
+            Release1ChiefCampbellCopy.LateFeeText(30000),
+            Release1ChiefCampbellCopy.StandingText(25000),
             Release1ChiefCampbellCopy.PaidText,
             Release1ChiefCampbellCopy.WatchListText,
             Release1ChiefCampbellCopy.LockdownAnnouncementText,
             Release1ChiefCampbellCopy.LiftPaidText,
             Release1ChiefCampbellCopy.LiftCooledText,
             Release1ChiefCampbellCopy.PaymentBlockedText,
-            Release1ChiefCampbellCopy.PayLabel(15000),
+            Release1ChiefCampbellCopy.ForcedWantedWarningText,
+            Release1ChiefCampbellCopy.PayLabel(25000),
             Release1ChiefCampbellCopy.DeclineLabel,
             Release1ChiefCampbellCopy.FallbackLogText,
             Release1ChiefCampbellCopy.ContactFirstName,
             Release1ChiefCampbellCopy.ContactLastName
         };
 
-        Assert.Equal(16, strings.Length);
+        Assert.Equal(19, strings.Length);
         foreach (var value in strings) AssertPlayerCopy(value);
+    }
+
+    [Fact]
+    public void Late_fee_text_names_the_new_price()
+    {
+        Assert.Equal(
+            "Every day you make me wait costs you. It's 30000 now.",
+            Release1ChiefCampbellCopy.LateFeeText(30000));
+    }
+
+    [Fact]
+    public void Standing_text_keeps_the_offer_open()
+    {
+        Assert.Equal(
+            "The file is still on my desk. 25000 in cash and it is gone.",
+            Release1ChiefCampbellCopy.StandingText(25000));
     }
 }

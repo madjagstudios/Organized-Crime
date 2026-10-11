@@ -1,3 +1,4 @@
+using OrganizedCrime.Core.Diagnostics;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
@@ -17,8 +18,17 @@ public sealed class Release1PresentationProjector : IDisposable
     private readonly IRelease1PresentationCommandSink _commands;
     private readonly Action<string> _log;
     private readonly bool _reconcileQuests;
+    private readonly Func<bool>? _decisionOwnedElsewhere;
     private bool _saveSuspended;
     private bool _disposed;
+
+    /// <summary>
+    /// Fault messages already reported to the log (OC-102). Reconcile() runs every frame, so a
+    /// fault that persists across passes logs once per distinct message until it clears, not once
+    /// per pass. Reset on a fully successful pass and on pre-load, so a fault that clears and
+    /// later recurs is reported again.
+    /// </summary>
+    private readonly OnceLog _reportedFaults;
 
     /// <summary>
     /// OC-73. <paramref name="reconcileQuests"/> defaults to true, so Nell's own projector (the only
@@ -38,7 +48,8 @@ public sealed class Release1PresentationProjector : IDisposable
         IRelease1NativePresentation native,
         IRelease1PresentationCommandSink commands,
         Action<string>? log = null,
-        bool reconcileQuests = true)
+        bool reconcileQuests = true,
+        Func<bool>? decisionOwnedElsewhere = null)
     {
         _story = story ?? throw new ArgumentNullException(nameof(story));
         _plan = plan ?? throw new ArgumentNullException(nameof(plan));
@@ -46,7 +57,15 @@ public sealed class Release1PresentationProjector : IDisposable
         _commands = commands ?? throw new ArgumentNullException(nameof(commands));
         _log = log ?? (_ => { });
         _reconcileQuests = reconcileQuests;
+        _decisionOwnedElsewhere = decisionOwnedElsewhere;
+        _reportedFaults = new OnceLog(_log);
     }
+
+    /// <summary>
+    /// The plan from the most recent reconcile pass, or null before the first pass.
+    /// Chapter 3 reads this to yield Nell's reply buttons while Release 1 wants them.
+    /// </summary>
+    public Release1PresentationPlan? LastPlan { get; private set; }
 
     public void OnLoadComplete()
     {
@@ -57,6 +76,8 @@ public sealed class Release1PresentationProjector : IDisposable
     public void OnPreLoad()
     {
         _saveSuspended = false;
+        LastPlan = null;
+        _reportedFaults.ClearAll();
         try { _native.OnPreLoad(); }
         catch (Exception exception) { _log($"Release 1 native presentation OnPreLoad faulted: {exception.GetType().Name}"); }
     }
@@ -80,8 +101,11 @@ public sealed class Release1PresentationProjector : IDisposable
     /// Diffs the current plan against observed native state and applies only the difference.
     /// Safe to call repeatedly in one frame: every step re-reads live state, so a pass with
     /// nothing left to do performs only read calls. Any boundary exception, or a returned
-    /// <see cref="Release1NativePresentationStatus.Faulted"/>, is logged once and ends the pass;
-    /// the next pass retries the diff from scratch. <see cref="Release1NativePresentationStatus.Unavailable"/>
+    /// <see cref="Release1NativePresentationStatus.Faulted"/>, ends the pass; the next pass
+    /// retries the diff from scratch. Each distinct fault message is logged once until it clears
+    /// (OC-102): this runs every frame, so a fault that persists across passes must not log once
+    /// per pass. The reported set resets on a fully successful pass and on pre-load, so a fault
+    /// that clears and later recurs is reported again. <see cref="Release1NativePresentationStatus.Unavailable"/>
     /// and <see cref="Release1NativePresentationStatus.Rejected"/> also end the pass, without logging,
     /// since they are ordinary recoverable conditions. The one exception is the decision-set/clear
     /// calls: a non-<see cref="Release1NativePresentationStatus.Faulted"/>,
@@ -112,13 +136,13 @@ public sealed class Release1PresentationProjector : IDisposable
         {
             if (loggedThisPass) return;
             loggedThisPass = true;
-            _log(message);
+            _reportedFaults.Report(message, message);
         }
 
         if (!TryStatus(() => _native.TryEnsureContact(), LogOnce, "Release 1 native presentation contact check", out _)) return;
 
         Release1PresentationPlan plan;
-        try { plan = _plan(); }
+        try { plan = _plan(); LastPlan = plan; }
         catch (Exception exception) { LogOnce($"Release 1 presentation planning faulted: {exception.GetType().Name}"); return; }
 
         if (!ReconcileMessages(plan.Messages, LogOnce)) return;
@@ -129,9 +153,20 @@ public sealed class Release1PresentationProjector : IDisposable
         // a reload: skip the decision reconcile entirely rather than clearing native responses S1API
         // may have just restored (they would otherwise read as "unwanted" and get cleared, only for the
         // same offer to be re-sent once eligibility resolves, producing a duplicate message).
-        if (!plan.DecisionUndetermined && !ReconcileDecision(plan.Decision, observedDecision, LogOnce)) return;
+        var decisionOwnedElsewhere = false;
+        if (_decisionOwnedElsewhere is not null)
+        {
+            try { decisionOwnedElsewhere = _decisionOwnedElsewhere(); }
+            catch (Exception exception) { LogOnce($"Release 1 decision ownership check faulted: {exception.GetType().Name}"); }
+        }
+
+        if (!plan.DecisionUndetermined && !decisionOwnedElsewhere && !ReconcileDecision(plan.Decision, observedDecision, LogOnce)) return;
 
         if (_reconcileQuests && !ReconcileQuests(plan.Quests, LogOnce)) return;
+
+        // Every step succeeded: the boundary is healthy, so a fault that recurs later is new
+        // and must be reported again.
+        _reportedFaults.ClearAll();
     }
 
     public void Dispose()

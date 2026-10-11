@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "story": {
+    "playerId": "76561190000000001",
+    "standing": 80,
+    "relationshipState": "Accepted",
+    "release1Recognized": true,
+    "introLogicalCorrelationIds": [
+      "oc10/v1/76561190000000001/release1.intro/0/IntroAccepted/oc48-owner-qa-intro"
+    ],
+    "recognitionLogicalCorrelationIds": [
+      "oc10/v1/76561190000000001/release1.intro/0/Release1Recognized/oc48-owner-qa-recognition"
+    ],
+    "missions": [
+      {
+        "missionKey": "release1.small-courtesy",
+        "state": "Satisfied",
+        "attempt": 1,
+        "termsVersion": "oc48-owner-qa-v1",
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "OnTime",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": "oc48-owner-qa-1-reward",
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionAccepted/oc48-owner-qa-1-accepted",
+          "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionActivated/oc48-owner-qa-1-activated",
+          "oc10/v1/76561190000000001/release1.small-courtesy/1/MissionCompleted/oc48-owner-qa-1-completed"
+        ],
+        "nativePresentationRef": null,
+        "revision": 3
+      },
+      {
+        "missionKey": "release1.wrong-address",
+        "state": "Satisfied",
+        "attempt": 1,
+        "termsVersion": "oc48-owner-qa-v1",
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "OnTime",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": "oc48-owner-qa-2-reward",
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.wrong-address/1/MissionAccepted/oc48-owner-qa-2-accepted",
+          "oc10/v1/76561190000000001/release1.wrong-address/1/MissionActivated/oc48-owner-qa-2-activated",
+          "oc10/v1/76561190000000001/release1.wrong-address/1/MissionCompleted/oc48-owner-qa-2-completed"
+        ],
+        "nativePresentationRef": null,
+        "revision": 4
+      },
+      {
+        "missionKey": "release1.room-with-no-name",
+        "state": "Satisfied",
+        "attempt": 1,
+        "termsVersion": "oc48-owner-qa-v1",
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "OnTime",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": "oc48-owner-qa-3-reward",
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionAccepted/oc48-owner-qa-3-accepted",
+          "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionActivated/oc48-owner-qa-3-activated",
+          "oc10/v1/76561190000000001/release1.room-with-no-name/1/MissionCompleted/oc48-owner-qa-3-completed"
+        ],
+        "nativePresentationRef": null,
+        "revision": 4
+      },
+      {
+        "missionKey": "release1.short-notice",
+        "state": "Satisfied",
+        "attempt": 1,
+        "termsVersion": "oc48-owner-qa-v1",
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "OnTime",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": "oc48-owner-qa-4-reward",
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.short-notice/1/MissionAccepted/oc48-owner-qa-4-accepted",
+          "oc10/v1/76561190000000001/release1.short-notice/1/MissionActivated/oc48-owner-qa-4-activated",
+          "oc10/v1/76561190000000001/release1.short-notice/1/MissionCompleted/oc48-owner-qa-4-completed"
+        ],
+        "nativePresentationRef": null,
+        "revision": 4
+      },
+      {
+        "missionKey": "release1.keep-the-lights-off",
+        "state": "Satisfied",
+        "attempt": 1,
+        "termsVersion": "oc48-owner-qa-v1",
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "OnTime",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": "oc48-owner-qa-5-reward",
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionAccepted/oc48-owner-qa-5-accepted",
+          "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionActivated/oc48-owner-qa-5-activated",
+          "oc10/v1/76561190000000001/release1.keep-the-lights-off/1/MissionCompleted/oc48-owner-qa-5-completed"
+        ],
+        "nativePresentationRef": null,
+        "revision": 4
+      },
+      {
+        "missionKey": "release1.the-envelope",
+        "state": "Satisfied",
+        "attempt": 1,
+        "termsVersion": "oc48-owner-qa-v1",
+        "acceptedGameTimeHours": null,
+        "deadlineGameTimeHours": null,
+        "lastOutcome": "OnTime",
+        "standingPenaltyApplied": 0,
+        "penaltyReceiptIds": [],
+        "makeGoodFailures": 0,
+        "recoveryMode": "None",
+        "rewardAuthorizationReceiptId": "oc48-owner-qa-6-reward",
+        "quietConditionAwarded": false,
+        "nativeEffectIds": [],
+        "presentationCorrelationIds": [],
+        "acceptedLogicalCorrelations": [
+          "oc10/v1/76561190000000001/release1.the-envelope/1/MissionAccepted/oc48-owner-qa-6-accepted",
+          "oc10/v1/76561190000000001/release1.the-envelope/1/MissionActivated/oc48-owner-qa-6-activated",
+          "oc10/v1/76561190000000001/release1.the-envelope/1/MissionCompleted/oc48-owner-qa-6-completed"
+        ],
+        "nativePresentationRef": null,
+        "revision": 4
+      }
+    ],
+    "nativeEffects": [],
+    "revision": 19
+  }
+}

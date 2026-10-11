@@ -1,3 +1,5 @@
+using OrganizedCrime.Model;
+
 namespace OrganizedCrime.Runtime;
 
 /// <summary>

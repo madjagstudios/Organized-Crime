@@ -15,4 +15,8 @@ public interface IFishWarehousePropertySnapshotStore
         out byte[] bytes, out string? failureReason);
     bool TryRestoreNativeProperty(string saveFolder, FishWarehouseProtectedSnapshot snapshot,
         out string? failureReason);
+    bool TryReadRestorableBytes(string saveFolder, FishWarehouseProtectedSnapshot snapshot,
+        out byte[] bytes, out string? failureReason);
+    bool TryPreserveFailedInspection(string saveFolder, byte[] bytes,
+        out string preservedPath, out string? failureReason);
 }

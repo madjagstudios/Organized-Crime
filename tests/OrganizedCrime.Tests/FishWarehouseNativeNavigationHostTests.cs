@@ -78,7 +78,7 @@ public sealed class FishWarehouseNativeNavigationHostTests
             new FishWarehouseNativeNavigationLink(new(0f, 0f, 4f), new(0f, 0f, 8f), 2f, 0.35f, true),
             new(0f, 0f, 3f),
             1f),
-        CreateIdlePoints(FishWarehouseEmployeeInfrastructureDefinition.Capacity),
+        CreateIdlePoints(FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount),
         LockerPoint: null,
         PackagingStationPoint: null);
 

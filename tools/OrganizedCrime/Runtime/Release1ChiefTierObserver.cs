@@ -52,21 +52,31 @@ public sealed class Release1ChiefTierObserver : ILocalPressureTierTransitionSink
     public void ResetForEpoch(Guid sessionEpoch, long loadEpoch) => Clear();
 
     /// <summary>
-    /// Takes the oldest queued event for exactly this player, session epoch and load epoch. Anything
-    /// else is left where it is: only <see cref="Clear"/> and <see cref="ResetForEpoch"/> ever
-    /// discard, so a mismatched drain can never silently eat an event the correct pass wanted.
+    /// Takes the oldest queued event for exactly this player, session epoch and load epoch.
+    /// OC-77: mismatched heads are skipped (dequeued, counted with the overflow drops, and
+    /// reported through the same once-per-load warning) instead of wedging the queue: leaving
+    /// a stale head in place made every drain return false forever, starving the matching
+    /// events behind it. Only <see cref="Clear"/> and <see cref="ResetForEpoch"/> discard
+    /// matching entries.
     /// </summary>
     public bool TryDequeue(string playerId, Guid sessionEpoch, long loadEpoch, out Release1ChiefQueuedEvent queued)
     {
         queued = null!;
         lock (_gate)
         {
-            if (_queue.Count == 0) return false;
-            var head = _queue.Peek();
-            if (!string.Equals(head.PlayerId, playerId, StringComparison.Ordinal) ||
-                head.SessionEpoch != sessionEpoch || head.LoadEpoch != loadEpoch) return false;
-            queued = _queue.Dequeue();
-            return true;
+            while (_queue.Count > 0)
+            {
+                var head = _queue.Peek();
+                if (string.Equals(head.PlayerId, playerId, StringComparison.Ordinal) &&
+                    head.SessionEpoch == sessionEpoch && head.LoadEpoch == loadEpoch)
+                {
+                    queued = _queue.Dequeue();
+                    return true;
+                }
+                _queue.Dequeue();
+                DroppedCount++;
+            }
+            return false;
         }
     }
 

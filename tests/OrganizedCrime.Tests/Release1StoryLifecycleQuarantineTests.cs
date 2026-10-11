@@ -12,6 +12,7 @@ namespace OrganizedCrime.Tests;
 /// because the sidecar could not be parsed has its exact bytes rewritten on the next save start
 /// instead of the runtime staying silent and writing nothing.
 /// </summary>
+[Collection("OC-151 composition scope")]
 public sealed class Release1StoryLifecycleQuarantineTests
 {
     [Fact]

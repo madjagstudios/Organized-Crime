@@ -2,6 +2,7 @@ using Il2CppFishNet;
 using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.PlayerScripts;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 
 namespace OrganizedCrime.Runtime;
 
@@ -20,7 +21,7 @@ public sealed class SyndicateHqHostContextAdapter : IRelease1StoryHostContext
             var server = InstanceFinder.ServerManager;
             var client = InstanceFinder.ClientManager;
             if (server is null || client is null) return Release1StoryHostContextReadStatus.Pending;
-            if (!server.OneServerStarted()) return Release1StoryHostContextReadStatus.NotAuthoritative;
+            if (!FishNetHostGate.IsStarted(server)) return Release1StoryHostContextReadStatus.NotAuthoritative;
             if (!client.Started) return Release1StoryHostContextReadStatus.Pending;
             var folder = LoadManager.Instance?.LoadedGameFolderPath;
             if (!LocalPressureHostLifecyclePolicies.TryGetCanonicalHostIdentity(folder, out var identity)) return Release1StoryHostContextReadStatus.Pending;

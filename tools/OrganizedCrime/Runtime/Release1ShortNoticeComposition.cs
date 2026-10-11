@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 namespace OrganizedCrime.Runtime;
 
 /// <summary>
@@ -13,7 +14,7 @@ public sealed class Release1ShortNoticeComposition : IDisposable
 
     public Release1ShortNoticeComposition(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IDeliveryMissionWorld world,
         Release1PhoneCallService phone,
         Action<string>? log = null)
     {

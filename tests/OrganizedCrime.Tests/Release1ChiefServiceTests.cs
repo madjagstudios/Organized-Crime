@@ -5,6 +5,7 @@ using Xunit;
 
 namespace OrganizedCrime.Tests;
 
+[Collection("OC-151 composition scope")]
 public sealed class Release1ChiefServiceTests
 {
     [Fact]
@@ -93,7 +94,7 @@ public sealed class Release1ChiefServiceTests
     }
 
     [Fact]
-    public void Decline_replies_and_touches_nothing_else()
+    public void Decline_replies_and_keeps_the_pay_button_standing()
     {
         using var harness = Harness.Create();
         harness.Service.Update();
@@ -112,8 +113,13 @@ public sealed class Release1ChiefServiceTests
             Assert.True(missionsBefore[i].ValueEquals(harness.Story.State!.Missions[i]));
 
         var plan = Release1ChiefPresentation.BuildPlan(harness.Story.State);
-        Assert.Null(plan.Decision);
         Assert.Contains(plan.Messages, m => m.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.DeclineReplyText));
+        Assert.NotNull(plan.Decision);
+        Assert.Equal("chief-campbell-demand-r1", plan.Decision!.Id);
+        Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.StandingText(25000)), plan.Decision.Prompt);
+        var option = Assert.Single(plan.Decision.Options);
+        Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PayLabel(25000)), option.Label);
+        Assert.Equal(Release1PresentationCommand.ChiefCampbellPay, option.Command);
     }
 
     [Fact]
@@ -148,7 +154,7 @@ public sealed class Release1ChiefServiceTests
         var plan = Release1ChiefPresentation.BuildPlan(harness.Story.State);
         // OC-73 review fix. ThirdDemandText is the decision's own prompt now, not also a message.
         Assert.Equal(Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.ThirdDemandText), plan.Decision!.Prompt);
-        Assert.Contains(plan.Decision!.Options, o => o.Label == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PayLabel(25_000)));
+        Assert.Contains(plan.Decision!.Options, o => o.Label == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PayLabel(35_000)));
     }
 
     [Fact]
@@ -163,7 +169,7 @@ public sealed class Release1ChiefServiceTests
         Assert.False(harness.Service.TryPay());
         Assert.Equal(Release1ChiefState.DemandOpen, harness.Record!.State);
         Assert.Equal(0, harness.World.DebitCalls);
-        Assert.Equal(5_000d, harness.Record!.LastShortfallNoticed);
+        Assert.Equal(15_000d, harness.Record!.LastShortfallNoticed);
         var revisionAfterFirst = harness.Record!.Revision;
 
         Assert.False(harness.Service.TryPay());
@@ -171,7 +177,7 @@ public sealed class Release1ChiefServiceTests
 
         harness.World.CashBalance = 12_000f;
         Assert.False(harness.Service.TryPay());
-        Assert.Equal(3_000d, harness.Record!.LastShortfallNoticed);
+        Assert.Equal(13_000d, harness.Record!.LastShortfallNoticed);
         Assert.True(harness.Record!.Revision > revisionAfterFirst);
         Assert.Equal(0, harness.World.DebitCalls);
     }
@@ -196,10 +202,10 @@ public sealed class Release1ChiefServiceTests
         Assert.Equal("CashTransfer", effect.EffectKind);
         Assert.Equal("player-wallet", effect.SourceIdentity);
         Assert.Equal("chief-campbell", effect.DestinationIdentity);
-        Assert.Equal("15000", effect.AmountOrCargoIdentity);
+        Assert.Equal("25000", effect.AmountOrCargoIdentity);
         Assert.Equal(Release1NativeEffectPhase.Applied, effect.Phase);
         Assert.Equal(1, harness.World.DebitCalls);
-        Assert.Equal(-15_000f, harness.World.LastDebitAmount);
+        Assert.Equal(-25_000f, harness.World.LastDebitAmount);
         Assert.Equal(Release1ChiefState.Paying, harness.Record!.State);
     }
 
@@ -300,7 +306,7 @@ public sealed class Release1ChiefServiceTests
         Assert.Equal(Release1ChiefState.Paying, harness.Record!.State);
         Assert.Equal(2, harness.World.DebitCalls);
         Assert.Equal(2, harness.Story.State!.NativeEffects.Count);
-        Assert.Equal(balanceBeforePay - 15_000f, harness.World.CashBalance);
+        Assert.Equal(balanceBeforePay - 25_000f, harness.World.CashBalance);
         Assert.Equal(Release1NativeEffectPhase.Applied, harness.Story.State!.NativeEffects.Single(e => e.EffectId != orphaned.EffectId).Phase);
     }
 
@@ -591,8 +597,8 @@ public sealed class Release1ChiefServiceTests
         Assert.False(firstPay);
         Assert.Equal(Release1ChiefState.Paying, harness.Record!.State);
         Assert.Equal(1, harness.World.DebitCalls);
-        Assert.Equal(-15_000f, harness.World.LastDebitAmount);
-        Assert.Equal(100_000f - 15_000f, harness.World.CashBalance);
+        Assert.Equal(-25_000f, harness.World.LastDebitAmount);
+        Assert.Equal(100_000f - 25_000f, harness.World.CashBalance);
         Assert.Equal(Release1NativeEffectPhase.Prepared, harness.Story.State!.NativeEffects.Single().Phase);
         Assert.Contains(warnings, w => w.Contains("read-back", StringComparison.OrdinalIgnoreCase));
 
@@ -604,7 +610,7 @@ public sealed class Release1ChiefServiceTests
         Assert.Equal(Release1NativeEffectPhase.Applied, harness.Story.State!.NativeEffects.Single().Phase);
         Assert.Equal(Release1ChiefState.Paying, harness.Record!.State);
         Assert.Equal(1, harness.World.DebitCalls);
-        Assert.Equal(85_000f, harness.World.CashBalance);
+        Assert.Equal(75_000f, harness.World.CashBalance);
     }
 
     [Fact]
@@ -629,6 +635,70 @@ public sealed class Release1ChiefServiceTests
         Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
         var plan = Release1ChiefPresentation.BuildPlan(harness.Story.State);
         Assert.Contains(plan.Messages, m => m.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.PaidText));
+    }
+
+    [Fact]
+    public void A_payment_recorded_under_the_old_ladder_settles_once_at_its_journaled_amount()
+    {
+        // OC-104. A save written while a $15k payment effect was recorded but not yet settled
+        // loads under the new ladder, where the same round now computes $25k. The journaled
+        // amount is the payment, not the ladder: the settle path must run exactly once, debit
+        // nothing further, and commit "15000", never "25000".
+        using var harness = Harness.Create();
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.Equal(Release1ChiefState.DemandOpen, harness.Record!.State);
+        Assert.Equal(1, harness.Record!.DemandRound);
+        Assert.Equal(25_000, harness.Record!.Demand);
+
+        // What the old code persisted for this round: a Paying record with an Applied effect
+        // journaled at the old amount. Built through the same prepare/mark-applied writes
+        // RunPay performs, with only the amount held at the old rung.
+        var record = harness.Record!;
+        var correlationId = Release1LogicalCorrelation.Create(
+            harness.PlayerId, Release1MissionCatalog.ChiefCampbell, 1, Release1TransitionKind.ChiefPaymentAccepted,
+            $"chief-pay-r1-c{record.Revision}").Value;
+        var effectId = Release1ChiefEffect.EffectId(1, record.Revision);
+        var prepared = new Release1NativeEffectJournalEntry(
+            effectId, Release1MissionCatalog.ChiefCampbell, 1, Release1ChiefEffect.Kind,
+            Release1ChiefEffect.WalletSource, Release1ChiefEffect.Scope, "15000",
+            Release1NativeEffectPhase.Prepared, null, harness.Story.State!.Revision + 1,
+            AuthorizedStoryCorrelationId: correlationId, AuthorizedMissionRevision: record.Revision);
+        Assert.True(harness.Story.TryPrepareNativeEffect(prepared).Accepted);
+        Assert.Equal(Release1ChiefState.Paying, harness.Record!.State);
+        Assert.Equal(
+            Release1SmallCourtesyWorldMutationStatus.Succeeded,
+            harness.World.TryDebitCashBalance(-15_000f));
+        Assert.True(harness.Story.TryMarkNativeEffectApplied(
+            effectId, Release1ChiefEffect.NativeReceiptId(1, record.Revision),
+            Release1NativeEffectPersistenceMode.RevertTolerant).Accepted);
+
+        // A restart hands the mod a fresh world and service over the persisted story: the
+        // settle runs there, against the new ladder, with zeroed debit counters.
+        using var restart = RestartOver(harness);
+        Tick(restart);
+
+        Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
+        Assert.Equal(1, harness.Ledger.WipeCalls);
+        Assert.Equal(0, restart.World.DebitCalls);
+
+        // A second pass settles nothing again.
+        Tick(restart);
+        Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
+        Assert.Equal(1, harness.Ledger.WipeCalls);
+        Assert.Equal(0, restart.World.DebitCalls);
+
+        harness.Story.OnSaveStart();
+        harness.Story.OnSaveComplete();
+        harness.Service.OnSaveComplete();
+        Tick(restart);
+
+        var committed = harness.Story.State!.NativeEffects.Single(e => e.EffectId == effectId);
+        Assert.Equal(Release1NativeEffectPhase.Committed, committed.Phase);
+        Assert.Equal("15000", committed.AmountOrCargoIdentity);
+        Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
+        Assert.Equal(Release1StoryRuntimePhase.Active, harness.Story.Phase);
     }
 
     // OC-73 settled drain fix. Proven live on the installed Release build: the player paid, was
@@ -1234,7 +1304,7 @@ public sealed class Release1ChiefServiceTests
         }
     }
 
-    private sealed class ChiefFakeWorld : Release1ProductionOnlyWorld
+    private sealed class ChiefFakeWorld : Release1ChiefWorldStub
     {
         public float CashBalance { get; set; } = 100_000f;
         public double? TotalMinutes { get; set; } = 0d;
@@ -1247,9 +1317,6 @@ public sealed class Release1ChiefServiceTests
         // only reads that happen once at least one debit call has been made, so the pre-debit
         // sufficiency read RunPay itself performs is never affected by it.
         public Release1SmallCourtesyWorldReadStatus? ReadCashResultAfterDebit { get; set; }
-
-        public override Release1SmallCourtesyWorldReadStatus TryReadProductionActivity(out Release1ProductionActivitySnapshot activity) =>
-            throw new NotSupportedException();
 
         public override Release1SmallCourtesyWorldReadStatus TryReadCanonicalTotalMinutes(out double totalMinutes)
         {
@@ -1374,5 +1441,260 @@ public sealed class Release1ChiefServiceTests
             Service.Dispose();
             Story.Dispose();
         }
+    }
+
+    [Fact]
+    public void TryPay_from_a_decline_settles_through_the_same_debit()
+    {
+        using var harness = Harness.Create();
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.True(harness.Service.TryDecline());
+        harness.World.CashBalance = 100_000f;
+
+        Assert.True(harness.Service.TryPay());
+        Tick(harness);
+
+        Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
+        Assert.Equal(75_000f, harness.World.CashBalance);
+    }
+
+    [Theory]
+    [InlineData(2, 30000)]
+    [InlineData(3, 35000)]
+    public void Standing_button_payments_settle_at_the_raised_price(int targetRound, int price)
+    {
+        using var harness = Harness.Create();
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        for (var round = 1; round < targetRound; round++)
+        {
+            Assert.True(harness.Service.TryDecline());
+            harness.Arrest();
+            harness.Service.Update();
+        }
+        Assert.True(harness.Service.TryDecline());
+        harness.World.CashBalance = 100_000f;
+
+        Assert.True(harness.Service.TryPay());
+        Tick(harness);
+
+        Assert.Equal(targetRound, harness.Record!.DemandRound);
+        Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
+        Assert.Equal(100_000f - price, harness.World.CashBalance);
+    }
+
+    [Fact]
+    public void Settling_from_a_decline_lifts_the_lockdown()
+    {
+        using var harness = Harness.Create();
+        EngageLockdown(harness);
+        Assert.True(harness.Service.TryDecline());
+        harness.World.CashBalance = 100_000f;
+
+        Assert.True(harness.Service.TryPay());
+        Tick(harness);
+
+        Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
+        Assert.False(harness.Record!.LockdownEngaged);
+        Assert.Equal(1, harness.Record!.PaidLifts);
+        Assert.Equal(1, harness.World.ReleaseCalls);
+    }
+
+    [Fact]
+    public void Standing_pay_survives_a_restart()
+    {
+        using var harness = Harness.Create();
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.True(harness.Service.TryDecline());
+        harness.World.CashBalance = 100_000f;
+
+        using var restart = RestartOver(harness);
+        Assert.True(restart.Service.TryPay());
+        Tick(restart);
+
+        Assert.Equal(Release1ChiefState.Settled, harness.Record!.State);
+    }
+
+    [Fact]
+    public void Short_cash_from_a_decline_notices_the_shortfall_and_stays_declined()
+    {
+        using var harness = Harness.Create();
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.True(harness.Service.TryDecline());
+        harness.World.CashBalance = 100f;
+
+        Assert.False(harness.Service.TryPay());
+
+        Assert.Equal(Release1ChiefState.Declined, harness.Record!.State);
+        Assert.Equal(24900d, harness.Record!.LastShortfallNoticed);
+    }
+
+    [Fact]
+    public void First_pass_with_an_unpaid_demand_establishes_the_marker_without_charging()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = 500d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+
+        Assert.Equal(Release1ChiefState.DemandOpen, harness.Record!.State);
+        Assert.Equal(1, harness.Record!.DemandRound);
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(0, harness.Record!.LateFeesCharged);
+    }
+
+    [Fact]
+    public void Next_day_with_an_unpaid_demand_charges_and_sends_the_fee_text()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = 500d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
+
+        harness.World.TotalMinutes = 1440d + 5d;
+        harness.Service.Update();
+
+        Assert.Equal(2, harness.Record!.DemandRound);
+        Assert.Equal(1, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(1, harness.Record!.LateFeesCharged);
+        var plan = Release1ChiefPresentation.BuildPlan(harness.Story.State);
+        Assert.Contains(plan.Messages, m => m.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.LateFeeText(30000)));
+    }
+
+    [Fact]
+    public void Fee_never_charges_twice_in_one_day()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = 500d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        harness.World.TotalMinutes = 1440d + 5d;
+        harness.Service.Update();
+        Assert.Equal(2, harness.Record!.DemandRound);
+
+        harness.World.TotalMinutes = 1440d + 65d;
+        harness.Service.Update();
+
+        Assert.Equal(2, harness.Record!.DemandRound);
+        Assert.Equal(1, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(1, harness.Record!.LateFeesCharged);
+    }
+
+    [Fact]
+    public void Fee_skips_when_the_clock_is_unreadable()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = 500d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
+        var revisionBefore = harness.Record!.Revision;
+
+        harness.World.TotalMinutes = null;
+        harness.Service.Update();
+
+        Assert.Equal(1, harness.Record!.DemandRound);
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(revisionBefore, harness.Record!.Revision);
+    }
+
+    [Fact]
+    public void Fee_skips_a_negative_clock()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = 500d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        var revisionBefore = harness.Record!.Revision;
+
+        harness.World.TotalMinutes = -1d;
+        harness.Service.Update();
+
+        Assert.Equal(1, harness.Record!.DemandRound);
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(revisionBefore, harness.Record!.Revision);
+    }
+
+    [Fact]
+    public void Fee_stops_at_the_cap()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = 500d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.True(harness.Service.TryDecline());
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.True(harness.Service.TryDecline());
+        harness.Arrest();
+        harness.Service.Update();
+        Assert.Equal(3, harness.Record!.DemandRound);
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
+
+        harness.World.TotalMinutes = 1440d + 5d;
+        harness.Service.Update();
+
+        Assert.Equal(3, harness.Record!.DemandRound);
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(0, harness.Record!.LateFeesCharged);
+        var plan = Release1ChiefPresentation.BuildPlan(harness.Story.State);
+        Assert.DoesNotContain(plan.Messages, m => m.Text == Release1PlayerCopy.Normalize(Release1ChiefCampbellCopy.LateFeeText(35000)));
+    }
+
+    [Fact]
+    public void Old_save_with_unpaid_demand_establishes_then_charges()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = (5 * 1440) + 10d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+
+        Assert.Equal(1, harness.Record!.DemandRound);
+        Assert.Equal(5, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(0, harness.Record!.LateFeesCharged);
+
+        harness.World.TotalMinutes = (6 * 1440) + 10d;
+        harness.Service.Update();
+
+        Assert.Equal(2, harness.Record!.DemandRound);
+        Assert.Equal(6, harness.Record!.LastLateFeeChargedDay);
+        Assert.Equal(1, harness.Record!.LateFeesCharged);
+    }
+
+    [Fact]
+    public void Fee_does_not_charge_while_paying()
+    {
+        using var harness = Harness.Create();
+        harness.World.TotalMinutes = 500d;
+        harness.Service.Update();
+        harness.Arrest();
+        harness.Service.Update();
+        harness.World.CashBalance = 100_000f;
+        Assert.True(harness.Service.TryPay());
+        harness.Ledger.WipeResult = new(false, LocalPressureEvidenceWriteRejectReason.NotAuthoritativeHost, null, "not yet");
+        harness.Service.Update();
+        Assert.Equal(Release1ChiefState.Paying, harness.Record!.State);
+
+        harness.World.TotalMinutes = 1440d + 5d;
+        harness.Service.Update();
+
+        Assert.Equal(Release1ChiefState.Paying, harness.Record!.State);
+        Assert.Equal(1, harness.Record!.DemandRound);
+        Assert.Equal(0, harness.Record!.LastLateFeeChargedDay);
     }
 }

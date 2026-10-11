@@ -103,6 +103,9 @@ public sealed class FishWarehousePersistenceReplayService
 
     public string? FailureReason => _failureReason;
 
+    private string PhaseForLog() =>
+        _phase == FishWarehouseReplayPhase.Inactive ? nameof(FishWarehouseReplayPhase.Captured) : _phase.ToString();
+
     public bool RequiresSnapshotProtection =>
         _lifecycle.RequiresSnapshotProtection ||
         ((int)_phase >= (int)FishWarehouseReplayPhase.Captured &&
@@ -112,7 +115,10 @@ public sealed class FishWarehousePersistenceReplayService
     public void HandleLoadComplete()
     {
         if (_loadCompleteHandled)
+        {
+            _log("Fish Warehouse load-complete ignored: this load was already handled (a duplicate notification, or PreLoad did not reset it).");
             return;
+        }
 
         _loadCompleteHandled = true;
         var saveFolder = _activeSaveFolder();
@@ -129,7 +135,7 @@ public sealed class FishWarehousePersistenceReplayService
         }
         catch (Exception ex)
         {
-            FailCurrentPhase($"capture recovery threw: {ex.Message}");
+            FailCurrentPhase("capture recovery threw.", ex);
             return;
         }
 
@@ -146,7 +152,7 @@ public sealed class FishWarehousePersistenceReplayService
         }
         catch (Exception ex)
         {
-            FailCurrentPhase($"save state load threw: {ex.Message}");
+            FailCurrentPhase("save state load threw.", ex);
             return;
         }
 
@@ -225,7 +231,7 @@ public sealed class FishWarehousePersistenceReplayService
         }
         catch (Exception ex)
         {
-            FailCurrentPhase($"load-complete replay setup threw: {ex.Message}");
+            FailCurrentPhase("load-complete replay setup threw.", ex);
         }
     }
 
@@ -245,6 +251,7 @@ public sealed class FishWarehousePersistenceReplayService
                 catch (Exception ex)
                 {
                     _log($"Fish Warehouse fresh-load delivery flush failed safely: {ex.Message}");
+                    _log($"Fish Warehouse delivery flush failure detail: {ex}");
                 }
             }
 
@@ -298,7 +305,7 @@ public sealed class FishWarehousePersistenceReplayService
         }
         catch (Exception ex)
         {
-            FailCurrentPhase($"replay update threw: {ex.Message}");
+            FailCurrentPhase("replay update threw.", ex);
         }
     }
 
@@ -347,7 +354,7 @@ public sealed class FishWarehousePersistenceReplayService
         }
         catch (Exception ex)
         {
-            FailCurrentPhase($"object replay threw: {ex.Message}");
+            FailCurrentPhase("object replay threw.", ex);
         }
     }
 
@@ -375,7 +382,7 @@ public sealed class FishWarehousePersistenceReplayService
         }
         catch (Exception ex)
         {
-            FailCurrentPhase($"employee replay threw: {ex.Message}");
+            FailCurrentPhase("employee replay threw.", ex);
         }
     }
 
@@ -397,7 +404,7 @@ public sealed class FishWarehousePersistenceReplayService
         }
         catch (Exception ex)
         {
-            FailCurrentPhase($"delivery replay threw: {ex.Message}");
+            FailCurrentPhase("delivery replay threw.", ex);
         }
     }
 
@@ -418,8 +425,11 @@ public sealed class FishWarehousePersistenceReplayService
         _phase = nextPhase;
     }
 
-    private void FailCurrentPhase(string reason)
+    private void FailCurrentPhase(string reason, Exception? exception = null)
     {
+        if (exception is not null)
+            _log($"WARNING: Fish Warehouse replay failed at {PhaseForLog()}: {reason}{Environment.NewLine}{exception}");
+
         _failureReason = reason;
         var failurePhase = _phase == FishWarehouseReplayPhase.Inactive
             ? FishWarehouseReplayPhase.Captured
@@ -434,6 +444,7 @@ public sealed class FishWarehousePersistenceReplayService
             catch (Exception ex)
             {
                 _log($"Fish Warehouse failed replay checkpoint persistence threw: {ex.Message}");
+                _log($"Fish Warehouse checkpoint persistence failure detail: {ex}");
             }
         }
 
@@ -486,6 +497,7 @@ public sealed class FishWarehousePersistenceReplayService
         catch (Exception ex)
         {
             _log($"Fish Warehouse retained delivery flush threw after replay failure: {ex.Message}");
+            _log($"Fish Warehouse delivery flush failure detail: {ex}");
         }
     }
 

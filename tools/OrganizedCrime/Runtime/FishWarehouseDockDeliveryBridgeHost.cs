@@ -74,7 +74,7 @@ public sealed class FishWarehouseDockDeliveryBridgeHost
             if (HasOccupant(dock))
             {
                 _populationLatch.MarkPopulated(deliveryId);
-                log?.Invoke("[oc7-bridge] dock populated via native RefreshOccupant.");
+                OrganizedCrimeLog.Diagnostic("[oc7-bridge] dock populated via native RefreshOccupant.", log);
                 return;
             }
 
@@ -91,7 +91,7 @@ public sealed class FishWarehouseDockDeliveryBridgeHost
             if (HasOccupant(dock))
             {
                 _populationLatch.MarkPopulated(deliveryId);
-                log?.Invoke("[oc7-bridge] dock populated via direct SetOccupant (arrived delivery van).");
+                OrganizedCrimeLog.Diagnostic("[oc7-bridge] dock populated via direct SetOccupant (arrived delivery van).", log);
             }
         }
         catch
@@ -245,7 +245,10 @@ public sealed class FishWarehouseDockDeliveryBridgeHost
                     continue;
 
                 _lastDockSummary[i] = summary;
-                log?.Invoke($"[oc7-dock] dock{i}: {summary}.");
+                if (summary.Contains("<err>", StringComparison.Ordinal))
+                    log?.Invoke($"[oc7-dock] dock{i}: {summary}.");
+                else
+                    OrganizedCrimeLog.Diagnostic($"[oc7-dock] dock{i}: {summary}.", log);
             }
         }
         catch

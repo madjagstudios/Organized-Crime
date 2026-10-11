@@ -39,4 +39,22 @@ public interface IRuntimePropertyHost
     bool EmployeeNavigationReady { get; }
     int? EmployeeNavigationAgentTypeId { get; }
     RuntimePropertyHostResult Stop();
+
+    /// <summary>
+    /// Drops every reference to a runtime whose game scene has already been unloaded
+    /// (OC-108). Its objects were destroyed with the scene, so there is nothing left to
+    /// restore, and a pending cleanup must not block the next load.
+    /// </summary>
+    void AbandonAfterSceneUnload() { }
+}
+
+public interface IFishWarehouseLightingOwnerQa
+{
+    bool LightingActive { get; }
+    bool TryAddLampAbovePlayer();
+    bool TryRemoveMostRecentLamp();
+    bool TryAdjustMostRecentLampHeight(float delta);
+    bool TryAdjustAllLampIntensity(float delta);
+    bool TryToggleMostRecentLampYaw();
+    bool TryLogLampLayout();
 }

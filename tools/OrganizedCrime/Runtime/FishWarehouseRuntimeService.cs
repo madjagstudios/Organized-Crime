@@ -8,6 +8,7 @@ public sealed class FishWarehouseRuntimeService
     private readonly IRuntimePropertyHost _host;
     private readonly Func<bool> _isReady;
     private readonly Func<bool> _tryPlaceEmployeeHome;
+    private readonly IFishWarehouseLightingOwnerQa? _lighting;
     private readonly Action<string> _log;
     private bool _restoreRequested;
     private bool _restoreEmployeeHomeRequested;
@@ -18,12 +19,14 @@ public sealed class FishWarehouseRuntimeService
         IRuntimePropertyHost host,
         Func<bool> isReady,
         Func<bool>? tryPlaceEmployeeHome = null,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        IFishWarehouseLightingOwnerQa? lighting = null)
     {
         _host = host;
         _isReady = isReady;
         _tryPlaceEmployeeHome = tryPlaceEmployeeHome ?? (() => false);
         _log = log ?? (_ => { });
+        _lighting = lighting;
     }
 
     public RuntimePropertyLifecycleState State { get; private set; } = RuntimePropertyLifecycleState.Unavailable;
@@ -96,8 +99,12 @@ public sealed class FishWarehouseRuntimeService
             var unload = Stop();
             if (!unload.CleanupPassed || State != RuntimePropertyLifecycleState.Unavailable)
             {
-                _log($"Fish Warehouse runtime Property could not prepare for save load: {unload.FailureReason ?? "cleanup was incomplete"}");
-                return false;
+                // OC-108: loads only happen from the main menu, so the previous scene is
+                // already unloaded and its objects destroyed. A partial cleanup cannot be
+                // retried; abandon the stale runtime so the new load can restore cleanly.
+                _log($"Fish Warehouse runtime Property from the previous scene was not fully cleaned ({unload.FailureReason ?? "cleanup was incomplete"}); abandoning it for the new load.");
+                _host.AbandonAfterSceneUnload();
+                State = RuntimePropertyLifecycleState.Unavailable;
             }
         }
         else if (State is RuntimePropertyLifecycleState.Starting or RuntimePropertyLifecycleState.Unloading)
@@ -109,7 +116,10 @@ public sealed class FishWarehouseRuntimeService
         {
             // These states have no live host instance to unload. Resetting at
             // the explicit load boundary allows the next OnLoadComplete event
-            // to perform a clean readiness transition.
+            // to perform a clean readiness transition. A Failed runtime may still
+            // hold a pending cleanup from the unloaded scene, so drop it too (OC-108).
+            if (State == RuntimePropertyLifecycleState.Failed)
+                _host.AbandonAfterSceneUnload();
             State = RuntimePropertyLifecycleState.Unavailable;
         }
 
@@ -135,14 +145,14 @@ public sealed class FishWarehouseRuntimeService
                 return;
 
             TransitionTo(RuntimePropertyLifecycleState.Ready);
-            _log("Fish Warehouse runtime Property is ready for developer lifecycle validation.");
+            OrganizedCrimeLog.Diagnostic("Fish Warehouse runtime Property is ready for developer lifecycle validation.", _log);
         }
 
         if (State != RuntimePropertyLifecycleState.Ready || !_restoreRequested)
             return;
 
         _restoreRequested = false;
-        _log("Restoring the owned Fish Warehouse runtime Property from the loaded save state.");
+        OrganizedCrimeLog.Diagnostic("Restoring the owned Fish Warehouse runtime Property from the loaded save state.", _log);
         var start = Start();
         if (start.Succeeded)
             TryUnlockDeveloperLifecycle();
@@ -161,6 +171,40 @@ public sealed class FishWarehouseRuntimeService
             $"Developer lifecycle toggle is unavailable in state {State}.");
     }
 
+    /// <summary>
+    /// Whether the Chapter 3 story purchase can acquire the warehouse: the
+    /// runtime can spawn from <see cref="RuntimePropertyLifecycleState.Ready"/>,
+    /// or it is already spawned and unowned.
+    /// </summary>
+    public bool CanAcquireForStory =>
+        State == RuntimePropertyLifecycleState.Ready ||
+        (State == RuntimePropertyLifecycleState.Spawned && !_propertyOwnershipApplied);
+
+    /// <summary>
+    /// The Chapter 3 story acquisition: Start from Ready (or reuse an
+    /// already-spawned unowned runtime), then the ownership unlock. The same
+    /// calls as the load-restore path, under a production name so story logic
+    /// never goes through the dev-key method. A failed unlock leaves the
+    /// service terminal, exactly like the dev path.
+    /// </summary>
+    public bool TryAcquireForStory()
+    {
+        if (State == RuntimePropertyLifecycleState.Spawned && _propertyOwnershipApplied)
+            return true;
+        if (State == RuntimePropertyLifecycleState.Ready)
+        {
+            var start = Start();
+            if (!start.Succeeded)
+                return false;
+        }
+        if (State != RuntimePropertyLifecycleState.Spawned || _propertyOwnershipApplied)
+        {
+            _log($"Fish Warehouse story acquire is unavailable in state {State}.");
+            return false;
+        }
+        return TryUnlockOwnership();
+    }
+
     public bool TryUnlockDeveloperLifecycle()
     {
         _restoreRequested = false;
@@ -175,6 +219,26 @@ public sealed class FishWarehouseRuntimeService
             return true;
         }
 
+        var passed = TryUnlockOwnership();
+        if (passed)
+        {
+            if (_restoreEmployeeHomeRequested && !_persistenceObjectReplayRequired)
+            {
+                _restoreEmployeeHomeRequested = false;
+                TryPlaceEmployeeHome();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The shared ownership unlock behind the dev key, the load restore, and
+    /// the story acquisition: native own, flags on success, terminal cleanup
+    /// on failure. Restore-only follow-ups stay with the callers.
+    /// </summary>
+    private bool TryUnlockOwnership()
+    {
         var passed = _host.TrySetOwned();
         if (passed)
         {
@@ -182,11 +246,6 @@ public sealed class FishWarehouseRuntimeService
             _owned = true;
             _propertyOwnershipApplied = true;
             _lastReportedEmployeeNavigationState = FishWarehouseContinuousNavigationState.Inactive;
-            if (_restoreEmployeeHomeRequested && !_persistenceObjectReplayRequired)
-            {
-                _restoreEmployeeHomeRequested = false;
-                TryPlaceEmployeeHome();
-            }
             return true;
         }
 
@@ -217,6 +276,49 @@ public sealed class FishWarehouseRuntimeService
         return passed;
     }
 
+    public bool TryLightingAddLamp() =>
+        WhenLightingActive(lighting => lighting.TryAddLampAbovePlayer(), "lamp add");
+
+    public bool TryLightingRemoveLamp() =>
+        WhenLightingActive(lighting => lighting.TryRemoveMostRecentLamp(), "lamp remove");
+
+    public bool TryLightingRaiseLamp() =>
+        WhenLightingActive(
+            lighting => lighting.TryAdjustMostRecentLampHeight(FishWarehouseLightingDefinition.HeightStep),
+            "lamp height");
+
+    public bool TryLightingLowerLamp() =>
+        WhenLightingActive(
+            lighting => lighting.TryAdjustMostRecentLampHeight(-FishWarehouseLightingDefinition.HeightStep),
+            "lamp height");
+
+    public bool TryLightingDimLamps() =>
+        WhenLightingActive(
+            lighting => lighting.TryAdjustAllLampIntensity(-FishWarehouseLightingDefinition.IntensityStep),
+            "lamp intensity");
+
+    public bool TryLightingBrightenLamps() =>
+        WhenLightingActive(
+            lighting => lighting.TryAdjustAllLampIntensity(FishWarehouseLightingDefinition.IntensityStep),
+            "lamp intensity");
+
+    public bool TryLightingToggleLampYaw() =>
+        WhenLightingActive(lighting => lighting.TryToggleMostRecentLampYaw(), "lamp yaw");
+
+    public bool TryLightingLogLayout() =>
+        WhenLightingActive(lighting => lighting.TryLogLampLayout(), "lamp layout");
+
+    private bool WhenLightingActive(Func<IFishWarehouseLightingOwnerQa, bool> action, string verb)
+    {
+        if (State != RuntimePropertyLifecycleState.Spawned || !_propertyOwnershipApplied || _lighting is null || !_lighting.LightingActive)
+        {
+            _log($"OC-109 {verb} refused: the warehouse is not spawned and owned with an active room");
+            return false;
+        }
+
+        return action(_lighting);
+    }
+
     public void MarkPersistenceObjectsReplayed()
     {
         _host.MarkPersistenceObjectsReplayed();
@@ -234,7 +336,7 @@ public sealed class FishWarehouseRuntimeService
         {
             _lastReportedEmployeeNavigationState = FishWarehouseContinuousNavigationState.Inactive;
             TransitionTo(RuntimePropertyLifecycleState.Spawned);
-            _log("Fish Warehouse runtime Property is spawned.");
+            OrganizedCrimeLog.Diagnostic("Fish Warehouse runtime Property is spawned.", _log);
         }
         else
         {
@@ -248,7 +350,7 @@ public sealed class FishWarehouseRuntimeService
     private RuntimePropertyHostResult Stop()
     {
         TransitionTo(RuntimePropertyLifecycleState.Unloading);
-        _log("Unloading Fish Warehouse runtime Property.");
+        OrganizedCrimeLog.Diagnostic("Unloading Fish Warehouse runtime Property.", _log);
         var result = _host.Stop();
         if (string.Equals(result.Stage, "occupied-loading-docks", StringComparison.Ordinal))
         {
@@ -267,7 +369,7 @@ public sealed class FishWarehouseRuntimeService
         if (result.CleanupPassed)
         {
             TransitionTo(RuntimePropertyLifecycleState.Unavailable);
-            _log("Fish Warehouse runtime Property unloaded cleanly.");
+            OrganizedCrimeLog.Diagnostic("Fish Warehouse runtime Property unloaded cleanly.", _log);
         }
         else
         {
@@ -288,7 +390,7 @@ public sealed class FishWarehouseRuntimeService
         switch (current)
         {
             case FishWarehouseContinuousNavigationState.Ready:
-                _log("Fish Warehouse employee navigation is ready.");
+                OrganizedCrimeLog.Diagnostic("Fish Warehouse employee navigation is ready.", _log);
                 break;
             case FishWarehouseContinuousNavigationState.Failed:
                 _log("Fish Warehouse employee navigation failed closed; property ownership and existing features remain active.");

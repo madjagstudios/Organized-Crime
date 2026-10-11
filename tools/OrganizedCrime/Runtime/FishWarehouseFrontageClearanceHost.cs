@@ -1,6 +1,7 @@
 using Il2CppScheduleOne.Property;
 using UnityEngine;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 
 namespace OrganizedCrime.Runtime;
 
@@ -78,12 +79,10 @@ public sealed class FishWarehouseFrontageClearanceHost
         {
             try
             {
-                if (cleared.Root == null)
-                {
-                    remaining.Add(cleared);
-                    log?.Invoke($"Fish Warehouse frontage clearance could not restore destroyed scene object (originally active={cleared.OriginalActiveSelf}).");
+                // Scene unload already cleaned a destroyed root. Retain only
+                // live roots whose original active state could not be restored.
+                if (!UnityLife.IsAlive(cleared.Root))
                     continue;
-                }
 
                 cleared.Root.SetActive(cleared.OriginalActiveSelf);
                 restored++;
@@ -100,7 +99,13 @@ public sealed class FishWarehouseFrontageClearanceHost
 
         _ready = false;
         if (restored > 0)
-            log?.Invoke($"Fish Warehouse frontage clearance restored {restored} scene object(s).");
+        {
+            var receipt = $"Fish Warehouse frontage clearance restored {restored} scene object(s).";
+            if (remaining.Count == 0)
+                OrganizedCrimeLog.Diagnostic(receipt, log);
+            else
+                log?.Invoke(receipt);
+        }
         if (remaining.Count > 0)
             log?.Invoke($"Fish Warehouse frontage clearance retained {remaining.Count} scene object(s) for diagnostics after partial restore; cleanup remains partial.");
         return remaining.Count == 0;

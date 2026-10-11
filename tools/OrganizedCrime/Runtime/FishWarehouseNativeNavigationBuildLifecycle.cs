@@ -318,7 +318,7 @@ public sealed class FishWarehouseNativeNavigationBuildLifecycle
 
     private static void ValidateIdlePointCount(IReadOnlyList<FishWarehouseNativeNavigationVector>? idlePoints)
     {
-        int expectedCount = FishWarehouseEmployeeInfrastructureDefinition.Capacity;
+        int expectedCount = FishWarehouseEmployeeInfrastructureDefinition.DefinedIdlePointCount;
         if (expectedCount != FishWarehouseEmployeeInfrastructureDefinition.IdlePoints.Count)
         {
             throw new InvalidOperationException(

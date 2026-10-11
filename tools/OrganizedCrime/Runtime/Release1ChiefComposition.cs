@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
@@ -22,14 +23,23 @@ public sealed class Release1ChiefComposition : IDisposable
 
     public Release1ChiefComposition(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IChiefWorld world,
         Release1ChiefTierObserver observer,
         Release1ChiefLedgerReader readLedger,
         Release1ChiefLedgerWiper wipeLedger,
         Release1ChiefEpochReader epochs,
         Release1PresentationMode mode = Release1PresentationMode.ImguiFallback,
         IRelease1NativePresentation? native = null,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        Func<int>? chapter3SuccessfulJobs = null,
+        IRelease1ProtectionCheckpointWorld? checkpointWorld = null,
+        Func<int, int?>? playerDay = null,
+        Func<bool>? isAuthoritativeHost = null,
+        IChapter3PlayerExposureReader? exposureReader = null,
+        IChapter3CurfewReader? curfewReader = null,
+        IChapter3WantedWriter? wantedWriter = null,
+        IChapter3ForcedWantedDispatch? forcedWantedDispatch = null,
+        IChapter3PursuitHold? pursuitHold = null)
     {
         ArgumentNullException.ThrowIfNull(story);
         ArgumentNullException.ThrowIfNull(world);
@@ -40,16 +50,20 @@ public sealed class Release1ChiefComposition : IDisposable
         if (mode == Release1PresentationMode.Native && native is null)
             throw new ArgumentException("A native presentation implementation is required in Native mode.", nameof(native));
 
+        SweepPresentation = mode == Release1PresentationMode.Native ? native : null;
         _mode = mode;
         _log = log ?? (_ => { });
 
-        Service = new Release1ChiefService(story, world, observer, readLedger, wipeLedger, epochs, LocalPressureProfile.Moderate);
+        Service = new Release1ChiefService(story, world, observer, readLedger, wipeLedger, epochs, LocalPressureProfile.Moderate, chapter3SuccessfulJobs, checkpointWorld,
+            isAuthoritativeHost, exposureReader, curfewReader, wantedWriter, forcedWantedDispatch, pursuitHold);
 
         if (mode == Release1PresentationMode.Native)
         {
             Projector = new Release1PresentationProjector(
                 story,
-                () => Release1ChiefPresentation.BuildPlan(story.State),
+                // OC-118: today drives Buy versus Extend and the banking-cap hide; playerDay shows
+                // the cover end day in the chapter days Nell and the quest line use.
+                () => Release1ChiefPresentation.BuildPlan(story.State, Service.ReadToday(), playerDay),
                 native!,
                 new ChiefCommandSink(Service),
                 log,
@@ -59,6 +73,7 @@ public sealed class Release1ChiefComposition : IDisposable
         }
     }
 
+    internal IRelease1NativePresentation? SweepPresentation { get; }
     public Release1ChiefService Service { get; }
     public Release1PresentationProjector? Projector { get; }
 
@@ -123,6 +138,7 @@ public sealed class Release1ChiefComposition : IDisposable
         {
             Release1PresentationCommand.ChiefCampbellPay => _service.TryPay(),
             Release1PresentationCommand.ChiefCampbellDecline => _service.TryDecline(),
+            Release1PresentationCommand.ChiefCampbellBuyProtection => _service.TryBuyProtection(),
             _ => false
         };
     }

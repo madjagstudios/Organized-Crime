@@ -1,3 +1,5 @@
+using OrganizedCrime.Runtime.Release1.World;
+using OrganizedCrime.Core.Diagnostics;
 using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Runtime;
@@ -17,7 +19,7 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
     };
 
     private readonly Release1StoryRuntimeService _story;
-    private readonly IRelease1SmallCourtesyWorld _world;
+    private readonly IDeliveryMissionWorld _world;
     private readonly Release1PhoneCallService? _phone;
     private readonly Action<string> _log;
     private bool _loadActive;
@@ -25,7 +27,7 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
     private bool _dismissed;
     private bool _disposed;
     private Release1ShortNoticeQuote? _reviewedQuote;
-    private readonly HashSet<string> _reportedHolds = new(StringComparer.Ordinal);
+    private readonly OnceLog _reportedHolds;
     private IRelease1SmallCourtesyDropSubscription? _dropSubscription;
     private string? _boundDropGuid;
     private string? _lockedDropGuid;
@@ -33,7 +35,7 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
 
     public Release1ShortNoticeMissionService(
         Release1StoryRuntimeService story,
-        IRelease1SmallCourtesyWorld world,
+        IDeliveryMissionWorld world,
         Release1PhoneCallService? phone = null,
         Action<string>? log = null)
     {
@@ -41,6 +43,7 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
         _world = world ?? throw new ArgumentNullException(nameof(world));
         _phone = phone;
         _log = log ?? (_ => { });
+        _reportedHolds = new OnceLog(_log);
     }
 
     public Release1ShortNoticeOfferStatus OfferStatus { get; private set; } = Release1ShortNoticeOfferStatus.Inactive;
@@ -53,7 +56,7 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
         _saving = false;
         _dismissed = false;
         _reviewedQuote = null;
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         RefreshOfferStatus();
         Converge();
     }
@@ -67,7 +70,7 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
         _saving = false;
         _dismissed = false;
         _reviewedQuote = null;
-        _reportedHolds.Clear();
+        _reportedHolds.ClearAll();
         OfferStatus = Release1ShortNoticeOfferStatus.Inactive;
     }
 
@@ -1162,8 +1165,7 @@ public sealed class Release1ShortNoticeMissionService : IDisposable
 
     private void ReportHoldOnce(int attempt, string message)
     {
-        if (!_reportedHolds.Add($"a{attempt}:{message}")) return;
-        _log($"Short Notice attempt {attempt} is holding: {message}");
+        _reportedHolds.Report($"a{attempt}:{message}", $"Short Notice attempt {attempt} is holding: {message}");
     }
 
     private static Release1ConsignmentFingerprint Fingerprint(Release1ShortNoticeAssignment assignment) =>

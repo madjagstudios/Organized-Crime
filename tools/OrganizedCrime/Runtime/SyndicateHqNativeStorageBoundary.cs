@@ -6,6 +6,7 @@ using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.Tiles;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 using S1API.Building;
 using S1API.Items;
 using UnityEngine;
@@ -36,14 +37,70 @@ public interface ISyndicateHqNativeStorageBoundary
         SyndicateHqStorageDefinition definition, int slotIndex, bool locked, out string reason);
     Release1SmallCourtesyWorldMutationStatus TryChangeClosetSlotCashBalance(
         SyndicateHqStorageDefinition definition, int slotIndex, float amount, out string reason);
+    /// <summary>
+    /// OC-136: decrements a locked closet slot's item quantity in place by
+    /// exactly <paramref name="amount"/> (negative, magnitude at most the
+    /// pre-quantity). The dead-drop slot rules applied to the closet: an
+    /// owned lock first, a negative-only change, and a verified
+    /// post-quantity. A default implementation so the existing fakes,
+    /// which never take this path, need no change.
+    /// </summary>
+    Release1SmallCourtesyWorldMutationStatus TryChangeClosetSlotQuantity(
+        SyndicateHqStorageDefinition definition, int slotIndex, int amount, out string reason)
+    {
+        reason = "The closet slot change is unavailable.";
+        return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+    }
+    /// <summary>
+    /// OC-136: sets the closet's storage UI name (the title
+    /// <c>StorageMenu.Open</c> reads off the entity) and verifies the
+    /// read-back. A default implementation so the existing fakes, which
+    /// never take this path, need no change.
+    /// </summary>
+    Release1SmallCourtesyWorldMutationStatus TrySetClosetStorageName(
+        SyndicateHqStorageDefinition definition, string name, out string reason)
+    {
+        reason = "The closet rename is unavailable.";
+        return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+    }
     void ReleaseOwnedClosetSlotLocks();
     bool TryPlace(object entity, SyndicateHqVector3 worldPosition, float yawDegrees, out string reason);
     void SetInteractionEnabled(object entity, bool enabled);
     bool TryCleanup(object entity, out string reason);
 }
 
-public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorageBoundary
+public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorageBoundary, Chapter3.IChapter3RaidHqSlotReader
 {
+    bool Chapter3.IChapter3RaidHqSlotReader.TryReadRaidSlot(string guid, int index, out Chapter3.Chapter3RaidSlotRead read)
+    {
+        read = null!;
+        if (!Chapter3StorageRun.PlayerClosetIds.Contains(guid)) return false;
+        var definition = SyndicateHqStorageContract.Definitions.SingleOrDefault(d => d.Guid.ToString("D") == guid);
+        if (definition is null || !TryResolveClosetSlot(definition, index, out var slot, out _)) return false;
+        var quantity = slot.Quantity;
+        if (quantity == 0) { read = new(0, null); return true; }
+        var product = slot.ItemInstance?.TryCast<ProductItemInstance>();
+        if (product is null) { read = new(quantity, "non-product"); return true; }
+        if (!UnityLife.IsAlive(product.Definition)) return false;
+        var id = product.Definition.ID;
+        var applied = product.AppliedPackaging;
+        var packaging = applied is not null && !string.IsNullOrWhiteSpace(applied.ID) ? applied.ID :
+            string.IsNullOrWhiteSpace(product.PackagingID) ? "none" : product.PackagingID;
+        var units = 1;
+        if (packaging != "none")
+        {
+            var raw = Il2CppScheduleOne.Registry.GetItem(packaging);
+            var package = UnityLife.IsAlive(raw) ? raw.TryCast<Il2CppScheduleOne.Product.Packaging.PackagingDefinition>() : null;
+            if (!UnityLife.IsAlive(package) || package!.Quantity < 1) return false;
+            units = package.Quantity;
+        }
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        var value = product.GetMonetaryValue();
+        if (!float.IsFinite(value) || value < 0f) value = 0f;
+        var planFingerprint = $"{id}|{packaging}|{units}|value={value.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
+        read = new(quantity, $"{id}|{packaging}|{units}|quality={product.Quality}", planFingerprint);
+        return true;
+    }
     private const string GridRootName = "OC_SyndicateHQ_StorageGrid";
     private const string GridGuid = "7ce4e626-4438-48c4-a88a-c1b47f99d66f";
     private const int GridWidth = SyndicateHqStorageGridContract.Width;
@@ -59,6 +116,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
     private GameObject? _gridProxy;
     private Grid? _grid;
     private Property? _parentProperty;
+    internal Exception? LastValidationException { get; private set; }
 
     public OrganizedCrimeTimingReceipts Timing { get; set; } = OrganizedCrimeTimingReceipts.Disabled;
 
@@ -93,7 +151,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
                 grid = existing!;
                 return true;
             }
-            if (!IsUnityNull(existing))
+            if (!UnityLife.IsUnityNull(existing))
             {
                 reason = "An existing HQ Grid used the reserved GUID but failed its Property or tile validation.";
                 return false;
@@ -102,8 +160,8 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
             var template = FindLargestOwnedGrid(out var sourceTileCount);
             var parentProperty = template?.ParentProperty;
             var sourceTile = template?.GetComponentsInChildren<Tile>(includeInactive: true)
-                .FirstOrDefault(tile => !IsUnityNull(tile) && !IsUnityNull(tile.gameObject));
-            if (IsUnityNull(template) || IsUnityNull(parentProperty) || IsUnityNull(sourceTile))
+                .FirstOrDefault(tile => !UnityLife.IsUnityNull(tile) && !UnityLife.IsUnityNull(tile.gameObject));
+            if (UnityLife.IsUnityNull(template) || UnityLife.IsUnityNull(parentProperty) || UnityLife.IsUnityNull(sourceTile))
             {
                 reason = "No owned vanilla Property Grid with a native Tile was available.";
                 return false;
@@ -122,7 +180,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
                 clone.name = GridRootName;
                 clone.SetActive(false);
                 prepared = clone.GetComponent<Grid>();
-                if (IsUnityNull(prepared))
+                if (UnityLife.IsUnityNull(prepared))
                     throw new InvalidOperationException("The owned Grid clone lost its Grid component.");
 
                 if (!TrySetMember(prepared!, "_guid", GridGuid) ||
@@ -136,7 +194,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
 
                 clone.SetActive(true);
                 var tiles = clone.GetComponentsInChildren<Tile>(includeInactive: true)
-                    .Where(tile => !IsUnityNull(tile))
+                    .Where(tile => !UnityLife.IsUnityNull(tile))
                     .ToArray();
                 RebuildNativeTopology(prepared!, tiles);
                 RegisterPropertyGrid(parentProperty!, prepared!);
@@ -154,9 +212,9 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
             }
             catch
             {
-                if (!IsUnityNull(prepared) && !IsUnityNull(parentProperty?.Grids)) parentProperty!.Grids.Remove(prepared);
-                if (!IsUnityNull(clone)) UnityEngine.Object.DestroyImmediate(clone);
-                if (!IsUnityNull(staging)) UnityEngine.Object.DestroyImmediate(staging);
+                if (!UnityLife.IsUnityNull(prepared) && !UnityLife.IsUnityNull(parentProperty?.Grids)) parentProperty!.Grids.Remove(prepared);
+                if (!UnityLife.IsUnityNull(clone)) UnityEngine.Object.DestroyImmediate(clone);
+                if (!UnityLife.IsUnityNull(staging)) UnityEngine.Object.DestroyImmediate(staging);
                 throw;
             }
         }
@@ -183,6 +241,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
     /// </summary>
     public void EvictRetainedClosetsForLoad()
     {
+        LastValidationException = null;
         _closets.Clear();
         _conflictedClosetGuids.Clear();
         _closetsScannedForLoad = false;
@@ -216,7 +275,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
                 }
 
                 var retained = _closets.GetValueOrDefault(definition.Guid);
-                if (retained is null || IsUnityNull(retained))
+                if (retained is null || UnityLife.IsUnityNull(retained))
                 {
                     localReason = $"No restored vanilla closet matched {definition.Guid:D}.";
                     return;
@@ -268,7 +327,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         _closetsScannedForLoad = true;
         var wanted = SyndicateHqStorageContract.Definitions.Select(candidate => candidate.Guid).ToHashSet();
         var groups = Resources.FindObjectsOfTypeAll<PlaceableStorageEntity>()
-            .Where(storage => !IsUnityNull(storage) && !IsUnityNull(storage.gameObject) &&
+            .Where(storage => !UnityLife.IsUnityNull(storage) && !UnityLife.IsUnityNull(storage.gameObject) &&
                 Guid.TryParse(storage.GUID.ToString(), out var guid) && wanted.Contains(guid))
             .GroupBy(storage => Guid.Parse(storage.GUID.ToString()));
         foreach (var group in groups)
@@ -306,7 +365,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
                 definition.Guid.ToString("D"));
             created = gameObject?.GetComponent<GridItem>();
             var storage = gameObject?.GetComponent<PlaceableStorageEntity>();
-            if (IsUnityNull(created) || IsUnityNull(storage))
+            if (UnityLife.IsUnityNull(created) || UnityLife.IsUnityNull(storage))
             {
                 reason = "Vanilla placement did not produce a complete PlaceableStorageEntity prefab.";
                 RollbackCreated(created);
@@ -335,27 +394,38 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
 
     public bool TryValidate(object entity, SyndicateHqStorageDefinition definition, out string reason)
     {
+        LastValidationException = null;
         try
         {
-            if (entity is not PlaceableStorageEntity closet || IsUnityNull(closet) ||
-                IsUnityNull(closet.gameObject) || IsUnityNull(closet.StorageEntity) ||
-                IsUnityNull(closet.OwnerGrid) || closet.OwnerGrid != _grid ||
-                IsUnityNull(closet.ParentProperty) || closet.ParentProperty != _parentProperty ||
-                !Guid.TryParse(closet.GUID.ToString(), out var guid) || guid != definition.Guid ||
-                closet.StorageEntity.SlotCount != definition.RequiredSlotCount ||
-                closet.StorageEntity.ItemSlots is null || closet.StorageEntity.ItemSlots.Count != definition.RequiredSlotCount ||
-                closet.AccessPoints is null || closet.AccessPoints.Length == 0 ||
-                closet.GetComponentsInChildren<Collider>(includeInactive: true).All(IsUnityNull))
+            reason = "The native closet was missing its exact GUID, Grid/Property ownership, 20 slots, access points, interaction, or colliders.";
+            if (entity is not PlaceableStorageEntity closet || !UnityLife.IsAlive(closet)) return false;
+            var gameObject = closet.gameObject;
+            var storage = closet.StorageEntity;
+            var grid = closet.OwnerGrid;
+            var property = closet.ParentProperty;
+            if (!UnityLife.IsAlive(gameObject) || !UnityLife.IsAlive(storage) ||
+                !UnityLife.IsAlive(grid) || !UnityLife.IsAlive(_grid) || grid != _grid ||
+                !UnityLife.IsAlive(property) || !UnityLife.IsAlive(_parentProperty) || property != _parentProperty) return false;
+            var slots = storage!.ItemSlots;
+            var accessPoints = closet.AccessPoints;
+            if (!Guid.TryParse(closet.GUID.ToString(), out var guid) || guid != definition.Guid ||
+                storage.SlotCount != definition.RequiredSlotCount ||
+                !IsNativeAlive(slots) || slots.Count != definition.RequiredSlotCount ||
+                !IsNativeAlive(accessPoints) || accessPoints.Length == 0 || accessPoints.Any(point => !UnityLife.IsAlive(point)) ||
+                !closet.GetComponentsInChildren<Collider>(includeInactive: true).Any(UnityLife.IsAlive) ||
+                !HasLiveStorageInteraction(closet))
             {
-                reason = "The native closet was missing its exact GUID, Grid/Property ownership, 20 slots, access points, or colliders.";
                 return false;
             }
+            for (var index = 0; index < slots.Count; index++)
+                if (!IsNativeAlive(slots[index])) return false;
 
             reason = $"Validated complete vanilla closet '{definition.Name}'.";
             return true;
         }
         catch (Exception ex)
         {
+            LastValidationException = ex;
             reason = $"Complete vanilla closet validation threw {ex.GetType().Name}: {ex.Message}";
             return false;
         }
@@ -372,12 +442,12 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         try
         {
             var closet = _closets.GetValueOrDefault(definition.Guid);
-            if (closet is null || IsUnityNull(closet))
+            if (closet is null || UnityLife.IsUnityNull(closet))
             {
                 if (!TryFindSingleCloset(definition, out closet, out reason)) return false;
             }
 
-            if (IsUnityNull(closet!.StorageEntity) || closet.StorageEntity.ItemSlots is null)
+            if (UnityLife.IsUnityNull(closet!.StorageEntity) || closet.StorageEntity.ItemSlots is null)
             {
                 reason = $"Closet '{definition.Name}' had no readable StorageEntity slots.";
                 return false;
@@ -458,7 +528,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         try
         {
             var matches = Resources.FindObjectsOfTypeAll<PlaceableStorageEntity>()
-                .Where(storage => !IsUnityNull(storage) && !IsUnityNull(storage.gameObject) &&
+                .Where(storage => !UnityLife.IsUnityNull(storage) && !UnityLife.IsUnityNull(storage.gameObject) &&
                     Guid.TryParse(storage.GUID.ToString(), out var guid) && guid == definition.Guid)
                 .Take(2)
                 .ToArray();
@@ -631,6 +701,129 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
     }
 
+    /// <summary>
+    /// OC-136: the shipped
+    /// <c>S1ApiRelease1SmallCourtesyWorldAccess.TryChangeSlotQuantity</c>
+    /// rules, applied to the closet and reported with a reason: an owned
+    /// lock first, a negative-only change that never drives the slot
+    /// below zero, and a verified post-quantity.
+    /// </summary>
+    public Release1SmallCourtesyWorldMutationStatus TryChangeClosetSlotQuantity(
+        SyndicateHqStorageDefinition definition, int slotIndex, int amount, out string reason)
+    {
+        var key = (definition.Guid, slotIndex);
+        if (!_ownedClosetSlotLocks.Contains(key))
+        {
+            reason = $"Closet '{definition.Name}' slot {slotIndex} was not locked by this mod.";
+            return Release1SmallCourtesyWorldMutationStatus.Rejected;
+        }
+        if (!TryResolveClosetSlot(definition, slotIndex, out var slot, out reason))
+            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+        var preQuantity = slot.Quantity;
+        if (amount >= 0 || preQuantity + amount < 0)
+        {
+            reason = $"Closet '{definition.Name}' slot {slotIndex} change {amount} was out of bounds.";
+            return Release1SmallCourtesyWorldMutationStatus.Rejected;
+        }
+        if (!TryResolveQuantityStorage(definition, slotIndex, slot, out var owner, out var storage))
+        {
+            reason = $"Closet '{definition.Name}' slot {slotIndex} lost its native storage owner.";
+            return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+        }
+        try
+        {
+            slot.SetIsRemovalLocked(false);
+            if (slot.IsRemovalLocked)
+            {
+                reason = $"Closet '{definition.Name}' slot {slotIndex} would not unlock for the change.";
+                return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
+            }
+            Chapter3.Chapter3RaidNativeQuantity.Take(-amount, () => slot.Quantity, slot.ChangeQuantity,
+                quantity => storage.SetItemSlotQuantity(slotIndex, quantity), () => owner.HasChanged = true);
+        }
+        catch (Exception ex)
+        {
+            reason = $"Closet '{definition.Name}' slot {slotIndex} change threw {ex.GetType().Name}: {ex.Message}";
+            return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
+        }
+        finally
+        {
+            try { slot.SetIsRemovalLocked(true); } catch { }
+        }
+        if (!slot.IsRemovalLocked)
+        {
+            reason = $"Closet '{definition.Name}' slot {slotIndex} would not relock after the change.";
+            return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
+        }
+        if (slot.Quantity != preQuantity + amount)
+        {
+            reason = $"Closet '{definition.Name}' slot {slotIndex} did not settle at the expected quantity after the change.";
+            return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
+        }
+        reason = $"Closet '{definition.Name}' slot {slotIndex} changed by {amount} from {preQuantity}.";
+        return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+    }
+
+    private bool TryResolveQuantityStorage(SyndicateHqStorageDefinition definition, int index,
+        Il2CppScheduleOne.ItemFramework.ItemSlot slot, out PlaceableStorageEntity owner,
+        out Il2CppScheduleOne.Storage.StorageEntity storage)
+    {
+        owner = _closets.GetValueOrDefault(definition.Guid)!;
+        storage = null!;
+        if (!UnityLife.IsAlive(owner) && !TryFindSingleCloset(definition, out owner, out _)) return false;
+        storage = owner.StorageEntity;
+        return UnityLife.IsAlive(storage) && storage.ItemSlots is not null && index >= 0 &&
+            index < storage.ItemSlots.Count && storage.ItemSlots[index] is { } current && current.Pointer == slot.Pointer;
+    }
+
+    /// <summary>
+    /// OC-136: writes the closet's storage UI name through the retained
+    /// entity first, falling back to the same single match lookup the
+    /// slot calls use, and verifies the read-back. Already-correct is
+    /// Succeeded without a write.
+    /// </summary>
+    public Release1SmallCourtesyWorldMutationStatus TrySetClosetStorageName(
+        SyndicateHqStorageDefinition definition, string name, out string reason)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            reason = $"Closet '{definition.Name}' rename refused: the name was blank.";
+            return Release1SmallCourtesyWorldMutationStatus.Rejected;
+        }
+        try
+        {
+            var closet = _closets.GetValueOrDefault(definition.Guid);
+            if (closet is null || UnityLife.IsUnityNull(closet))
+            {
+                if (!TryFindSingleCloset(definition, out closet, out reason))
+                    return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+            }
+            if (UnityLife.IsUnityNull(closet!.StorageEntity))
+            {
+                reason = $"Closet '{definition.Name}' had no storage entity to rename.";
+                return Release1SmallCourtesyWorldMutationStatus.Unavailable;
+            }
+            if (string.Equals(closet.StorageEntity.StorageEntityName, name, StringComparison.Ordinal))
+            {
+                reason = $"Closet '{definition.Name}' already shows '{name}'.";
+                return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+            }
+            closet.StorageEntity.StorageEntityName = name;
+            if (!string.Equals(closet.StorageEntity.StorageEntityName, name, StringComparison.Ordinal))
+            {
+                reason = $"Closet '{definition.Name}' did not keep the name '{name}'.";
+                return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
+            }
+            reason = $"Closet '{definition.Name}' now shows '{name}'.";
+            return Release1SmallCourtesyWorldMutationStatus.Succeeded;
+        }
+        catch (Exception ex)
+        {
+            reason = $"Closet rename threw {ex.GetType().Name}: {ex.Message}";
+            return Release1SmallCourtesyWorldMutationStatus.Ambiguous;
+        }
+    }
+
     public void ReleaseOwnedClosetSlotLocks()
     {
         foreach (var (guid, slotIndex) in _ownedClosetSlotLocks.ToArray())
@@ -654,11 +847,11 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
     {
         slot = null!;
         var closet = _closets.GetValueOrDefault(definition.Guid);
-        if (closet is null || IsUnityNull(closet))
+        if (closet is null || UnityLife.IsUnityNull(closet))
         {
             if (!TryFindSingleCloset(definition, out closet, out reason)) return false;
         }
-        if (IsUnityNull(closet!.StorageEntity) || closet.StorageEntity.ItemSlots is null ||
+        if (UnityLife.IsUnityNull(closet!.StorageEntity) || closet.StorageEntity.ItemSlots is null ||
             slotIndex < 0 || slotIndex >= closet.StorageEntity.ItemSlots.Count ||
             closet.StorageEntity.ItemSlots[slotIndex] is null)
         {
@@ -672,7 +865,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
 
     public bool TryPlace(object entity, SyndicateHqVector3 worldPosition, float yawDegrees, out string reason)
     {
-        if (entity is not PlaceableStorageEntity closet || IsUnityNull(closet) || !worldPosition.IsFinite || !float.IsFinite(yawDegrees))
+        if (entity is not PlaceableStorageEntity closet || UnityLife.IsUnityNull(closet) || !worldPosition.IsFinite || !float.IsFinite(yawDegrees))
         {
             reason = "The standard vanilla closet placement inputs were invalid.";
             return false;
@@ -681,7 +874,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         {
             var expectedPosition = new Vector3(worldPosition.X, worldPosition.Y, worldPosition.Z);
             var expectedRotation = Quaternion.Euler(0f, yawDegrees, 0f);
-            if (!IsUnityNull(_grid))
+            if (!UnityLife.IsUnityNull(_grid))
             {
                 _grid!.transform.SetParent(null, true);
                 _grid.gameObject.SetActive(true);
@@ -713,7 +906,12 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
 
     public void SetInteractionEnabled(object entity, bool enabled)
     {
-        if (entity is not PlaceableStorageEntity closet || IsUnityNull(closet) || IsUnityNull(closet.gameObject)) return;
+        if (entity is not PlaceableStorageEntity closet || !UnityLife.IsAlive(closet)) return;
+        var gameObject = closet.gameObject;
+        if (!UnityLife.IsAlive(gameObject)) return;
+        // Disable is safe even while interaction components are not ready. Unculling
+        // and activation must never run through a dead storage/interaction component.
+        if (enabled && (!UnityLife.IsAlive(closet.StorageEntity) || !HasLiveStorageInteraction(closet))) return;
         var hasGuid = Guid.TryParse(closet.GUID.ToString(), out var guid);
         SyndicateHqStorageCullingGuard.ApplyVisibility(
             enabled,
@@ -721,13 +919,27 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
             {
                 if (hasGuid) SyndicateHqStorageCullingGuard.SetVisible(guid, visible);
             },
-            () => closet.SetCulled(false),
-            active => closet.gameObject.SetActive(active));
+            () => { if (UnityLife.IsAlive(closet)) closet.SetCulled(false); },
+            active => { if (UnityLife.IsAlive(gameObject)) gameObject.SetActive(active); });
+    }
+
+    private static bool HasLiveStorageInteraction(PlaceableStorageEntity closet)
+    {
+        if (!UnityLife.IsAlive(closet)) return false;
+        var interactions = closet.GetComponentsInChildren<Il2CppScheduleOne.Storage.StorageEntityInteractable>(includeInactive: true);
+        return IsNativeAlive(interactions) && interactions.Length > 0 && interactions.All(UnityLife.IsAlive);
+    }
+
+    private static bool IsNativeAlive(object? value)
+    {
+        if (value is UnityEngine.Object unityObject) return UnityLife.IsAlive(unityObject);
+        try { return value is Il2CppObjectBase native && native.Pointer != IntPtr.Zero; }
+        catch { return false; }
     }
 
     public bool TryCleanup(object entity, out string reason)
     {
-        if (entity is not PlaceableStorageEntity closet || IsUnityNull(closet))
+        if (entity is not PlaceableStorageEntity closet || UnityLife.IsUnityNull(closet))
         {
             reason = "The native closet was already unavailable.";
             return true;
@@ -769,7 +981,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
 
     private static void RollbackCreated(GridItem? created)
     {
-        if (IsUnityNull(created)) return;
+        if (UnityLife.IsUnityNull(created)) return;
         try { created!.Destroy_Server(); } catch { }
     }
 
@@ -782,7 +994,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
 
     private static Grid? FindGridByGuid(string guid) =>
         UnityEngine.Object.FindObjectsOfType<Grid>(includeInactive: true)
-            .FirstOrDefault(grid => !IsUnityNull(grid) && string.Equals(grid.GUID.ToString(), guid, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(grid => !UnityLife.IsUnityNull(grid) && string.Equals(grid.GUID.ToString(), guid, StringComparison.OrdinalIgnoreCase));
 
     private static Grid? FindLargestOwnedGrid(out int tileCount)
     {
@@ -791,7 +1003,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         foreach (var candidate in UnityEngine.Object.FindObjectsOfType<Grid>(includeInactive: true))
         {
             var parent = candidate?.ParentProperty;
-            if (IsUnityNull(candidate) || IsUnityNull(candidate?.gameObject) || IsUnityNull(parent) || !parent!.IsOwned) continue;
+            if (UnityLife.IsUnityNull(candidate) || UnityLife.IsUnityNull(candidate?.gameObject) || UnityLife.IsUnityNull(parent) || !parent!.IsOwned) continue;
             var count = candidate!.GetComponentsInChildren<Tile>(includeInactive: true).Length;
             if (count <= tileCount) continue;
             best = candidate;
@@ -811,14 +1023,14 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         ClassifyGrid(grid) == SyndicateHqStorageGridShape.LegacyTwoCloset;
 
     private static bool HasReservedIdentityAndOwnedParent(Grid? grid) =>
-        !IsUnityNull(grid) && !IsUnityNull(grid?.gameObject) && !IsUnityNull(grid?.ParentProperty) &&
+        !UnityLife.IsUnityNull(grid) && !UnityLife.IsUnityNull(grid?.gameObject) && !UnityLife.IsUnityNull(grid?.ParentProperty) &&
         grid!.ParentProperty.IsOwned && string.Equals(grid.GUID.ToString(), GridGuid, StringComparison.OrdinalIgnoreCase);
 
     private static SyndicateHqStorageGridShape ClassifyGrid(Grid? grid)
     {
-        if (IsUnityNull(grid)) return SyndicateHqStorageGridShape.Invalid;
+        if (UnityLife.IsUnityNull(grid)) return SyndicateHqStorageGridShape.Invalid;
         var coordinates = grid!.GetComponentsInChildren<Tile>(includeInactive: true)
-            .Where(tile => !IsUnityNull(tile))
+            .Where(tile => !UnityLife.IsUnityNull(tile))
             .Select(tile => new SyndicateHqStorageGridCoordinate(tile.x, tile.y));
         return SyndicateHqStorageGridContract.Classify(coordinates);
     }
@@ -830,8 +1042,8 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         {
             var parentProperty = grid.ParentProperty;
             var sourceTile = grid.GetComponentsInChildren<Tile>(includeInactive: true)
-                .FirstOrDefault(tile => !IsUnityNull(tile) && !IsUnityNull(tile.gameObject));
-            if (IsUnityNull(parentProperty) || IsUnityNull(sourceTile))
+                .FirstOrDefault(tile => !UnityLife.IsUnityNull(tile) && !UnityLife.IsUnityNull(tile.gameObject));
+            if (UnityLife.IsUnityNull(parentProperty) || UnityLife.IsUnityNull(sourceTile))
             {
                 reason = "The exact legacy HQ Grid did not retain its owned Property or source Tile.";
                 return false;
@@ -841,7 +1053,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
             sourceTemplate.name = GridRootName + "_LegacyTileTemplate";
             sourceTemplate.SetActive(false);
             var templateTile = sourceTemplate.GetComponent<Tile>();
-            if (IsUnityNull(templateTile))
+            if (UnityLife.IsUnityNull(templateTile))
                 throw new InvalidOperationException("The legacy HQ Grid tile template lost its Tile component.");
 
             grid.gameObject.SetActive(false);
@@ -850,7 +1062,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
             PositionGrid(grid.transform);
             grid.gameObject.SetActive(true);
             var tiles = grid.GetComponentsInChildren<Tile>(includeInactive: true)
-                .Where(tile => !IsUnityNull(tile))
+                .Where(tile => !UnityLife.IsUnityNull(tile))
                 .ToArray();
             RebuildNativeTopology(grid, tiles);
             RegisterPropertyGrid(parentProperty!, grid);
@@ -868,14 +1080,14 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         }
         finally
         {
-            if (!IsUnityNull(sourceTemplate)) UnityEngine.Object.DestroyImmediate(sourceTemplate);
+            if (!UnityLife.IsUnityNull(sourceTemplate)) UnityEngine.Object.DestroyImmediate(sourceTemplate);
         }
     }
 
     private static void ReplaceTilesWithDeterministicFootprint(GameObject root, Grid grid, Tile sourceTile)
     {
         var inheritedTiles = root.GetComponentsInChildren<Tile>(includeInactive: true)
-            .Where(tile => !IsUnityNull(tile) && !IsUnityNull(tile.gameObject))
+            .Where(tile => !UnityLife.IsUnityNull(tile) && !UnityLife.IsUnityNull(tile.gameObject))
             .OrderByDescending(tile => HierarchyDepth(tile.transform))
             .ToArray();
         foreach (var tile in inheritedTiles) UnityEngine.Object.DestroyImmediate(tile.gameObject);
@@ -912,8 +1124,8 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
 
     private static void DisableProxyVisualsAndColliders(GameObject root)
     {
-        foreach (var renderer in root.GetComponentsInChildren<Renderer>(includeInactive: true)) if (!IsUnityNull(renderer)) renderer.enabled = false;
-        foreach (var collider in root.GetComponentsInChildren<Collider>(includeInactive: true)) if (!IsUnityNull(collider)) collider.enabled = false;
+        foreach (var renderer in root.GetComponentsInChildren<Renderer>(includeInactive: true)) if (!UnityLife.IsUnityNull(renderer)) renderer.enabled = false;
+        foreach (var collider in root.GetComponentsInChildren<Collider>(includeInactive: true)) if (!UnityLife.IsUnityNull(collider)) collider.enabled = false;
     }
 
     private static void RebuildNativeTopology(Grid grid, Tile[] tiles)
@@ -937,7 +1149,7 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
     private static int HierarchyDepth(Transform transform)
     {
         var depth = 0;
-        for (var current = transform; !IsUnityNull(current); current = current.parent) depth++;
+        for (var current = transform; !UnityLife.IsUnityNull(current); current = current.parent) depth++;
         return depth;
     }
 
@@ -981,7 +1193,4 @@ public sealed class SyndicateHqNativeStorageBoundary : ISyndicateHqNativeStorage
         }
         catch { return false; }
     }
-
-    private static bool IsUnityNull(object? value) => value is null || value == null;
-    private static bool IsUnityNull(UnityEngine.Object? value) => value == null;
 }

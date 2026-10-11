@@ -1,3 +1,5 @@
+using OrganizedCrime.Model;
+
 namespace OrganizedCrime.Runtime;
 
 public sealed class Release1PostBenziesUnlockReader : IRelease1PostBenziesUnlockReader

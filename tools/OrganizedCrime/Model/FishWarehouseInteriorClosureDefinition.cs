@@ -62,6 +62,30 @@ public static class FishWarehouseInteriorClosureDefinition
     /// <summary>Deliberate offset from a native wall plane, to avoid coincident-face z-fighting.</summary>
     public const float PlaneInset = 0.05f;
 
+    /// <summary>
+    /// How far past the native garage panel plane a jamb reveal extends, so its
+    /// outer edge tucks behind the pillar instead of stopping exactly on the plane.
+    /// </summary>
+    public const float GarageJambOverlap = 0.05f;
+
+    /// <summary>
+    /// Native west garage pillar (`Column (5)`), measured 2026-09-26 on 0.4.7f6 from
+    /// its world bounds solved against the Property's ~300° yaw: a 0.6 m square
+    /// pillar, inner face at X -11.90, front face at Z 7.80, top at Y 6.0. It stands
+    /// 0.3 m outside the authored west corner, so the corner jamb runs out to its
+    /// front and a cap closes the slot between jamb and pillar.
+    /// </summary>
+    public const float GarageCornerPillarInnerX = -11.90f;
+    public const float GarageCornerPillarFrontZ = 7.80f;
+    public const float GarageCornerPillarTopY = 6.0f;
+
+    /// <summary>
+    /// How far the corner cap tucks into the pillar (X) and sits behind its front
+    /// face (Z), absorbing the few centimetres of measurement error.
+    /// </summary>
+    public const float GarageCornerCapTuck = 0.10f;
+    public const float GarageCornerCapSetback = 0.04f;
+
     public static bool TryPlanCeiling(out FishWarehouseClosurePiece? ceiling)
     {
         // The enlarged ceiling must cover further than the authored room walls;
@@ -170,6 +194,77 @@ public static class FishWarehouseInteriorClosureDefinition
             DoubleSided: true);
 
         return header.HasArea && DoesNotIntrudeIntoGarageAperture(header, projection);
+    }
+
+    /// <summary>
+    /// Side-reveal (jamb) infills for the garage opening: vertical faces at the
+    /// opening's side planes, spanning from the authored north wall (Z = HalfDepth)
+    /// to just past the native garage panel plane. They close the thin sky sliver
+    /// seen along the garage jambs. Both edges get a jamb, including one that ends at
+    /// a room corner: the native wall sits ~0.7 m outside the authored corner
+    /// (owner raycast, native face at X -12.27), so the corner edge reveals sky too
+    /// (OC-110 owner run). The outer edge deliberately
+    /// extends past the transition prism by <see cref="GarageJambOverlap"/> to tuck
+    /// behind the pillar; the planes sit on the aperture boundary and extend in Z,
+    /// so they never enter the traversable opening. OC-4 gotcha: jambs must be built
+    /// as a separate render-only object with no collider, never merged into the room
+    /// mesh that doubles as its MeshCollider.
+    /// </summary>
+    public static IReadOnlyList<FishWarehouseClosurePiece> PlanGarageJambs(
+        FishWarehouseGarageOpeningProjection? projection)
+    {
+        var jambs = new List<FishWarehouseClosurePiece>();
+        if (projection is null)
+            return jambs;
+
+        float zNear = FishWarehouseInteriorRoomDefinition.HalfDepth;
+        float zFar = projection.TransitionPrism.MaximumZ + GarageJambOverlap;
+        float yBottom = projection.Opening.Bottom;
+        float yTop = GarageHeaderTopY;
+        if (zFar - zNear <= FishWarehouseWallOpeningPlanner.Epsilon ||
+            yTop - yBottom <= FishWarehouseWallOpeningPlanner.Epsilon)
+        {
+            return jambs;
+        }
+
+        jambs.Add(new FishWarehouseClosurePiece(
+            "garage-jamb-max",
+            FishWarehouseClosurePlane.WallX,
+            projection.Opening.HorizontalMaximum,
+            zNear,
+            zFar,
+            yBottom,
+            yTop,
+            DoubleSided: true));
+        // The minimum edge ends at the authored west corner, where the native pillar
+        // stands 0.3 m further out. Run that jamb to the pillar's front and cap the slot.
+        float minEdge = projection.Opening.HorizontalMinimum;
+        bool capCornerPillar = projection.Opening.IsCornerTerminatedAtMinimum &&
+            GarageCornerPillarInnerX < minEdge - FishWarehouseWallOpeningPlanner.Epsilon;
+        float capZ = GarageCornerPillarFrontZ - GarageCornerCapSetback;
+        jambs.Add(new FishWarehouseClosurePiece(
+            "garage-jamb-min",
+            FishWarehouseClosurePlane.WallX,
+            minEdge,
+            zNear,
+            capCornerPillar ? MathF.Max(zFar, capZ) : zFar,
+            yBottom,
+            yTop,
+            DoubleSided: true));
+        if (capCornerPillar)
+        {
+            jambs.Add(new FishWarehouseClosurePiece(
+                "garage-corner-cap",
+                FishWarehouseClosurePlane.WallZ,
+                capZ,
+                GarageCornerPillarInnerX - GarageCornerCapTuck,
+                minEdge,
+                yBottom,
+                GarageCornerPillarTopY,
+                DoubleSided: true));
+        }
+
+        return jambs.Where(jamb => jamb.HasArea).ToList();
     }
 
     private static float InsetTowardOrigin(float planeCoordinate) =>

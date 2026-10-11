@@ -144,7 +144,7 @@ public static class LocalPressureDecay
             PlayerId: state.PlayerId,
             Region: state.Region,
             PropertyCode: state.PropertyCode,
-            Revision: checked(state.Revision + 1));
+            Revision: checked(state.Revision + 1)) { LastAppliedRaidCoolingId = state.LastAppliedRaidCoolingId };
         var pauseReason = heatDelta != 0
             ? LocalPressureDecayPauseReason.None
             : LocalPressureDecayPauseReason.NoWholePointAccrued;
@@ -192,7 +192,7 @@ public static class LocalPressureDecay
                 PlayerId: state.PlayerId,
                 Region: state.Region,
                 PropertyCode: state.PropertyCode,
-                Revision: checked(state.Revision + 1));
+                Revision: checked(state.Revision + 1)) { LastAppliedRaidCoolingId = state.LastAppliedRaidCoolingId };
 
     private static void ValidateGameTime(double gameTimeHours)
     {

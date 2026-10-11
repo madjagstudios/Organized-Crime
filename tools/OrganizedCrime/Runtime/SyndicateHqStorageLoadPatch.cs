@@ -7,6 +7,7 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.ObjectScripts;
 using OrganizedCrime.Model;
+using OrganizedCrime.Runtime.Platform;
 
 namespace OrganizedCrime.Runtime;
 
@@ -19,7 +20,7 @@ public sealed class SyndicateHqStorageLoadContextAdapter
         {
             var server = InstanceFinder.ServerManager;
             var client = InstanceFinder.ClientManager;
-            if (server is null || client is null || !server.OneServerStarted() || !client.Started)
+            if (server is null || client is null || !FishNetHostGate.IsStarted(server) || !client.Started)
             {
                 reason = "The authoritative single-player host was not ready at the storage-load boundary.";
                 return false;
@@ -136,7 +137,7 @@ internal static class SyndicateHqStorageLoadPatch
                 ?? throw new MissingMethodException(typeof(SyndicateHqStorageLoadPatch).FullName, nameof(CullingPrefix));
             harmony.Patch(cullingOriginal, prefix: new HarmonyMethod(cullingPrefix));
 #if DEBUG
-            _receiptLog("Syndicate HQ storage receipt: vanilla load prefix applied.");
+            OrganizedCrimeLog.Diagnostic("Syndicate HQ storage receipt: vanilla load prefix applied.", _receiptLog);
 #endif
             return true;
         }
@@ -167,7 +168,7 @@ internal static class SyndicateHqStorageLoadPatch
         _loadCyclePrepared = false;
         _runtime?.DisableInteractions();
 #if DEBUG
-        _receiptLog("Syndicate HQ storage receipt: load cycle began.");
+        OrganizedCrimeLog.Diagnostic("Syndicate HQ storage receipt: load cycle began.", _receiptLog);
 #endif
     }
 
@@ -183,7 +184,9 @@ internal static class SyndicateHqStorageLoadPatch
         {
             var result = runtime.CompleteVanillaLoadBoundary();
 #if DEBUG
-            _receiptLog($"Syndicate HQ storage receipt: completion result={result.Status}; ready={result.IsReady}; reason={result.Reason}");
+            var receipt = $"Syndicate HQ storage receipt: completion result={result.Status}; ready={result.IsReady}; reason={result.Reason}";
+            if (result.IsReady) OrganizedCrimeLog.Diagnostic(receipt, _receiptLog);
+            else _receiptLog(receipt);
 #endif
             if (!result.IsReady)
                 _log($"Syndicate HQ standard closets remained inert after vanilla load: {result.Status} — {result.Reason}");
@@ -226,7 +229,9 @@ internal static class SyndicateHqStorageLoadPatch
 
             var admission = runtime.BeginLoad(snapshot);
 #if DEBUG
-            _receiptLog($"Syndicate HQ storage receipt: admission result={admission.Status}; reason={admission.Reason}");
+            var admissionReceipt = $"Syndicate HQ storage receipt: admission result={admission.Status}; reason={admission.Reason}";
+            if (admission.Status == SyndicateHqStorageStatus.NotPrepared) OrganizedCrimeLog.Diagnostic(admissionReceipt, _receiptLog);
+            else _receiptLog(admissionReceipt);
 #endif
             if (admission.Status != SyndicateHqStorageStatus.NotPrepared)
             {
@@ -238,7 +243,9 @@ internal static class SyndicateHqStorageLoadPatch
             var result = runtime.PrepareAtVanillaLoadBoundary();
             _loadCyclePrepared = result.Status == SyndicateHqStorageStatus.NotPrepared;
 #if DEBUG
-            _receiptLog($"Syndicate HQ storage receipt: grid preparation result={result.Status}; prepared={_loadCyclePrepared}; reason={result.Reason}");
+            var preparationReceipt = $"Syndicate HQ storage receipt: grid preparation result={result.Status}; prepared={_loadCyclePrepared}; reason={result.Reason}";
+            if (_loadCyclePrepared) OrganizedCrimeLog.Diagnostic(preparationReceipt, _receiptLog);
+            else _receiptLog(preparationReceipt);
 #endif
             if (!_loadCyclePrepared)
                 _log($"Syndicate HQ storage remained inert at native load: {result.Status} — {result.Reason}");

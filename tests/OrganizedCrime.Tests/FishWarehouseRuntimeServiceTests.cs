@@ -108,6 +108,80 @@ public sealed class FishWarehouseRuntimeServiceTests
     }
 
     [Fact]
+    public void Story_acquire_starts_from_ready_then_unlocks()
+    {
+        var host = new FakeHost(startSucceeds: true, cleanupSucceeds: true);
+        var service = new FishWarehouseRuntimeService(host, () => true);
+
+        service.Update();
+        Assert.True(service.CanAcquireForStory);
+
+        Assert.True(service.TryAcquireForStory());
+
+        Assert.Equal(RuntimePropertyLifecycleState.Spawned, service.State);
+        Assert.True(service.OwnershipUnlocked);
+        Assert.Equal(1, host.StartCalls);
+        Assert.Equal(1, host.OwnershipCalls);
+    }
+
+    [Fact]
+    public void Story_acquire_reuses_an_already_spawned_unowned_runtime()
+    {
+        var host = new FakeHost(startSucceeds: true, cleanupSucceeds: true);
+        var service = new FishWarehouseRuntimeService(host, () => true);
+
+        service.Update();
+        Assert.True(service.ToggleDeveloperLifecycle().Succeeded);
+        Assert.True(service.CanAcquireForStory);
+
+        Assert.True(service.TryAcquireForStory());
+
+        Assert.Equal(1, host.StartCalls);
+        Assert.Equal(1, host.OwnershipCalls);
+        Assert.True(service.OwnershipUnlocked);
+    }
+
+    [Fact]
+    public void Story_acquire_refuses_when_it_cannot_spawn()
+    {
+        var host = new FakeHost(startSucceeds: true, cleanupSucceeds: true);
+        var service = new FishWarehouseRuntimeService(host, () => false);
+
+        service.Update();
+        Assert.False(service.CanAcquireForStory);
+        Assert.False(service.TryAcquireForStory());
+        Assert.Equal(0, host.StartCalls);
+        Assert.Equal(0, host.OwnershipCalls);
+    }
+
+    [Fact]
+    public void Story_acquire_failure_is_terminal()
+    {
+        var host = new FakeHost(startSucceeds: true, cleanupSucceeds: true) { SetOwnedResult = false };
+        var service = new FishWarehouseRuntimeService(host, () => true);
+
+        service.Update();
+        Assert.False(service.TryAcquireForStory());
+
+        Assert.Equal(RuntimePropertyLifecycleState.Failed, service.State);
+        Assert.False(service.OwnershipUnlocked);
+        Assert.False(service.CanAcquireForStory);
+    }
+
+    [Fact]
+    public void Story_acquire_is_idempotent_once_owned()
+    {
+        var host = new FakeHost(startSucceeds: true, cleanupSucceeds: true);
+        var service = new FishWarehouseRuntimeService(host, () => true);
+
+        service.Update();
+        Assert.True(service.TryAcquireForStory());
+        Assert.True(service.TryAcquireForStory());
+
+        Assert.Equal(1, host.OwnershipCalls);
+    }
+
+    [Fact]
     public void Service_enters_terminal_failed_state_when_start_cleanup_is_unproven()
     {
         var host = new FakeHost(startSucceeds: false, cleanupSucceeds: false);
@@ -269,8 +343,35 @@ public sealed class FishWarehouseRuntimeServiceTests
         Assert.True(service.EmployeeNavigationReady);
     }
 
+    [Fact]
+    public void Reload_after_a_partial_cleanup_abandons_the_stale_runtime_and_restores()
+    {
+        // OC-108: after quit-to-menu the old scene is gone, so teardown at PreLoad reports
+        // a partial cleanup. That must not block the next load from restoring the warehouse.
+        var host = new FakeHost(startSucceeds: true, cleanupSucceeds: false);
+        var service = new FishWarehouseRuntimeService(host, () => true);
+        service.Update();
+        Assert.True(service.ToggleDeveloperLifecycle().Succeeded);
+        Assert.True(service.TryUnlockDeveloperLifecycle());
+
+        Assert.True(service.PrepareForLoad());
+        Assert.Equal(1, host.AbandonCalls);
+        Assert.Equal(RuntimePropertyLifecycleState.Unavailable, service.State);
+
+        service.ApplyLoadedSaveState(FishWarehouseSaveState.OwnedState());
+        service.RequestLoadedOwnedRestore();
+        service.Update();
+
+        Assert.Equal(2, host.StartCalls);
+        Assert.Equal(RuntimePropertyLifecycleState.Spawned, service.State);
+        Assert.True(service.OwnershipUnlocked);
+    }
+
     private sealed class FakeHost : IRuntimePropertyHost
     {
+        public int AbandonCalls { get; private set; }
+        public void AbandonAfterSceneUnload() => AbandonCalls++;
+
         private readonly bool _startSucceeds;
         private readonly bool _cleanupSucceeds;
         private readonly string _stopStage;
@@ -326,10 +427,12 @@ public sealed class FishWarehouseRuntimeServiceTests
 
         public bool TryAdoptRestoredEmployeeHome() => false;
 
+        public bool SetOwnedResult { get; set; } = true;
+
         public bool TrySetOwned()
         {
             OwnershipCalls++;
-            return true;
+            return SetOwnedResult;
         }
 
         public void UpdateOwnedFeatures()

@@ -1,3 +1,5 @@
+using OrganizedCrime.Model;
+
 namespace OrganizedCrime.Runtime;
 
 /// <summary>
@@ -31,6 +33,16 @@ public sealed record Release1ObservedDecision(string? Id, IReadOnlyList<string> 
 public sealed record Release1ObservedQuest(string Key, IReadOnlyList<Release1DesiredEntryState> EntryStates);
 
 /// <summary>
+/// One reply button with its own callback. Release 1 binds enum commands through
+/// <see cref="Release1DesiredDecision"/>; Chapter 3 binds these directly, since its commands
+/// carry payloads (make-good ids, cut weeks) an enum value cannot hold.
+/// </summary>
+public sealed record Release1LabeledDecisionOption(string Label, Action OnChosen);
+
+/// <summary>A decision prompt with labeled callbacks, for Chapter 3.</summary>
+public sealed record Release1LabeledDecision(string Id, string Prompt, IReadOnlyList<Release1LabeledDecisionOption> Options);
+
+/// <summary>
 /// The native presentation boundary: passive messages, at most one decision prompt, and quest
 /// entries. Implemented against S1API/Unity in a later task; this contract has no Unity or S1API
 /// references so it can be exercised with a fake in tests.
@@ -50,6 +62,7 @@ public interface IRelease1NativePresentation
     Release1NativePresentationStatus TryReadDecision(out Release1ObservedDecision? decision);
     Release1NativePresentationStatus TrySendMessage(string text);
     Release1NativePresentationStatus TrySetDecision(Release1DesiredDecision decision, Action<Release1PresentationCommand> onChosen);
+    Release1NativePresentationStatus TrySetLabeledDecision(Release1LabeledDecision decision);
     Release1NativePresentationStatus TryClearDecision();
     Release1NativePresentationStatus TryReadQuest(string key, out Release1ObservedQuest? quest);
     Release1NativePresentationStatus TryApplyQuest(Release1DesiredQuest quest);

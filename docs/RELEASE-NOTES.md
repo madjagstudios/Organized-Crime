@@ -1,53 +1,71 @@
-# Organized Crime, Release 1 (1.0.0)
+# Organized Crime release notes
 
-## What this release contains
+## 2.0.0: Chapter 3
 
-- **The Vacuum arc, six missions, all proven live** across four owner sessions (2026-09-03 to
-  2026-09-06): Small Courtesy, Wrong Address, A Room With No Name, Short Notice, Keep the Lights Off
-  (rebuilt onto a real production census, OC-65), The Envelope (redesigned onto an HQ closet deposit,
-  OC-61).
-- **Nell Grey**, the primary contact; her portrait borrows the vanilla NPC `lily_turner`'s icon,
-  ratified by the owner on 2026-09-06 and overridable through `OrganizedCrime.NellPortraitNpcId`.
-- **Arthur Selby**, the enforcer, reachable by phone on failure paths (OC-43). The in-person spike
-  (OC-69) is research only; compiled out of this release entirely (OC-70).
-- **Chief Campbell** (OC-73), the police made visible: he messages at the first arrest and at every
-  Watched and Critical crossing, demands 15000 to wipe the arrest record, raises it to 20000 and then
-  25000 on a decline, and at Critical announces a lockdown before a round the clock curfew engages on
-  the game's own curfew seam; the lockdown lifts on payment or once heat cools below Watched. Proven
-  live 2026-09-06 after two same day fixes. His messaging icon is S1API's default for now (OC-78).
-- **The Syndicate HQ**: a hidden pocket interior, nine native 20-slot storage closets used by the
-  hold-room and cash-gate missions above.
-- **Local Heat and Known Offender**: proven live; a bounded native law response adapter (OC-39/41)
-  dispatches a two-officer response at a watched or critical tier.
-- **Performance, measured 2026-09-06**: first load 3.1 s (the one door scene scan 2.1 s, the HQ
-  interior build 0.9 s), save 0.65 s (the interior build again). OC-70 removed every rescan it
-  targeted; the interior rebuild on each boundary is now the whole cost and is tracked as OC-76. Both
-  boundaries felt smooth in the owner's run.
+Requires Schedule I 0.4.7 (default branch) and S1API 3.2.1. Your 1.0 saves
+carry over. Chapter 3 starts on its own once you've finished Nell's six 1.0
+jobs, ending with The Envelope.
 
-## Known follow-ups
+- **Working for the family:** Nell offers repeatable dead drops, package
+  recovery, emergency supply, safehouse storage runs, cash movements and
+  property shutdowns. Offers show the reward and deadline before you accept,
+  and you can turn them down. Paid deadline extensions, trust milestones and
+  one overnight line from Nell each night are available.
+- **Arthur Selby:** failed jobs leave a make-good to pay. Arthur comes to
+  collect in person, and if you stay overdue he'll beat you.
+- **The Syndicate Warehouse:** buy the family's warehouse on the docks for
+  $300,000, hire up to 20 staff in three tiers, and pay the family $30,000 a
+  week. Fill weekly production demands at the HQ family locker and get paid
+  for each batch you hand over.
+- **Chief Campbell and the police:** the file-wipe price climbs from $25,000
+  to $35,000 with a daily late fee, and you can pay at any time. A $30,000
+  weekly protection retainer prevents lockdowns and checkpoints and reduces
+  patrols. Unpaid lockdowns lead to a forced Wanted chase after 24 hours.
+  Checkpoints, evening patrols, crackdown sweeps and property raids add
+  pressure at Watched and Critical heat. Raids can seize up to a quarter of
+  the product at one site, at most once a week; the HQ family locker, dead
+  drops and job stashes are never touched.
+- **Fixes and quality:** Nell texts once per hand-over, leaving a save with
+  the warehouse no longer throws errors, cloned police no longer render as
+  black figures or carry stray equipment, loading is faster than in 1.0,
+  and logs are quieter while failures remain clearly reported.
 
-- **OC-71**: packaging is a manual step this release; the Thunderstore and Nexus listings are built by
-  hand from `tools/OrganizedCrime/bin/Release/net6.0/OrganizedCrime.dll`.
-- **OC-72**: the Arthur spike's open questions if ever promoted out of research: a bounded provoke
-  visit (the 2026-09-05 run needed a NEEDS OPTION B cutoff; F5 lets a fight run to the player's death
-  with no bound) and a real appearance (he spawns naked; an avatar donor needs the game's own registry).
-- **OC-75**: pay the Chief without waiting for the next arrest. **OC-76**: retain the HQ interior
-  across boundaries. **OC-77**: tidy-ups from the OC-73 fix reviews. **OC-78**: a real icon for the
-  Chief.
-- **OC-74** (under OC-67) and **OC-68**: the forced Wanted rungs and Federal Heat, Release 2.
+The shutdown job pays $15,000-$20,000 to keep one operating owned property
+quiet for twelve game hours, with two days to finish. Monitoring covers
+employee work and chemistry stations, lab ovens, mixing stations, cauldrons
+and drying racks; manual pressing, packaging and laundering are not detected.
 
-## Fixed on main since 1.0.0, not yet packaged
+**Known limits:** Chief Campbell still uses a plain messaging icon. In a
+multiplayer session the mod loads, but the story and police pressure stay off.
 
-- **OC-79** (2026-09-09, from a Nexus report): the Nell intro never arrived when the cartel was
-  defeated mid-session. The eligibility check ran once, about a second after load, and latched off on
-  a not-yet-defeated cartel; only quitting to the menu and reloading re-armed it, and sleeping did not
-  help because S1API's `OnLoadComplete` is bound to `LoadManager`, not `SaveManager`. A `Locked`
-  result now starts a 5 s watch for the rest of the session. Proven live on slot 1: watch line 80 s
-  after load, offer without a reload. Whether a
-  natural Benzies defeat completes `Quest_DefeatCartel` at all is OC-80, still open.
+**Not in this release / coming later:** a forklift and a backpack for the
+warehouse, multiplayer support, and the family's later chapters.
 
-## Not in this release
+## 1.0.1
 
-Every item the 2026-09-05 feature inventory (`docs/reviews/2026-09-05-feature-inventory.md`) marks
-Designed only or Partly built: Chapters 3 through 6, all three story endings, property raids, laying
-low, police corruption, Federal Heat, and syndicate services consuming capacity.
+- Nell's first offer now arrives within seconds of the cartel's defeat,
+  even when it happens mid-session. Previously, players had to return to
+  the menu and reload their save to receive it.
+- A few progression bug fixes.
+
+## 1.0.0
+
+- **The Vacuum arc:** six missions from Nell Grey: Small Courtesy, Wrong
+  Address, A Room With No Name, Short Notice, Keep the Lights Off and The
+  Envelope. Keep the Lights Off uses a production census; The Envelope
+  uses an HQ closet deposit.
+- **Nell Grey:** the primary contact. Her portrait borrows the vanilla NPC
+  `lily_turner`'s icon and can be overridden through
+  `OrganizedCrime.NellPortraitNpcId`.
+- **Arthur Selby:** the enforcer, reachable by phone on failure paths.
+- **Chief Campbell:** messages at the first arrest and every Watched and
+  Critical crossing. He demands $15,000 to wipe the arrest record, rising
+  to $20,000 and then $25,000 on a decline. At Critical heat, he announces
+  a round the clock curfew lockdown that lifts on payment or when heat
+  cools below Watched.
+- **The Syndicate HQ:** a hidden interior with nine native 20-slot storage
+  closets for the hold-room and cash-gate missions.
+- **Local Heat and Known Offender:** a bounded police response dispatches
+  two officers at Watched or Critical heat.
+- **Performance:** repeated scene scans were removed; the HQ interior
+  still rebuilds at load and save boundaries.

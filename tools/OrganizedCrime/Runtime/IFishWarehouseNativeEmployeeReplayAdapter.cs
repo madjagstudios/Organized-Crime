@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OrganizedCrime.Persistence;
 
 namespace OrganizedCrime.Runtime;
 
@@ -37,15 +38,22 @@ public enum FishWarehouseEmployeeActiveMoveRestoreResult
     Failed
 }
 
+// RequiresFallbackCreation marks a record restored from the sidecar's
+// preserved list: it has no typed payload, so the replay skips the
+// registry loader and creates it through fallback instead.
 public sealed record FishWarehouseEmployeeReplayDescriptor(
     string Guid,
     string DataType,
     string Identity,
-    string RawJson)
+    string RawJson,
+    bool RequiresFallbackCreation = false)
 {
+    // Historical name: this is now the supported-employee gate for all four
+    // native types. Packager behavior is unchanged; Botanist, Chemist and
+    // Cleaner match their DataType identity too, while Handler and unknown
+    // types stay unsupported and preserved.
     public bool IsSupportedPackager =>
-        string.Equals(DataType, "PackagerData", StringComparison.Ordinal) &&
-        string.Equals(Identity, "Packager", StringComparison.Ordinal);
+        FishWarehouseEmployeeIdentity.IsSupportedEmployee(DataType, Identity);
 
     public bool TryParseExpectedState(
         out FishWarehouseEmployeeReplayExpectedState expected,
@@ -72,26 +80,22 @@ public sealed record FishWarehouseEmployeeReplayDescriptor(
 
             var payloadIdentity = baseData.TryGetProperty("Identity", out _)
                 ? ReadRequiredString(baseData, "Identity")
-                : string.Equals(payloadDataType, "PackagerData", StringComparison.Ordinal)
-                    ? "Packager"
-                    : throw new JsonException("Identity-missing");
-            var descriptorIdentity = string.IsNullOrWhiteSpace(Identity) &&
-                string.Equals(DataType, "PackagerData", StringComparison.Ordinal)
-                ? "Packager"
+                : FishWarehouseEmployeeIdentity.FromDataType(payloadDataType);
+            var descriptorIdentity = string.IsNullOrWhiteSpace(Identity)
+                ? FishWarehouseEmployeeIdentity.FromDataType(DataType)
                 : Identity;
             if (!string.Equals(payloadIdentity, descriptorIdentity, StringComparison.Ordinal))
                 throw new JsonException("identity-mismatch");
 
             var position = ReadObject(baseData, "Position");
             var rotation = ReadObject(baseData, "Rotation");
-            var configuration = ReadConfiguration(root);
+            var configuration = ReadConfigurationOrNull(root);
             var inventoryJson = ReadOptionalAdditionalData(root, "Inventory");
             var homeGuid = baseData.TryGetProperty("BedGUID", out _)
                 ? ReadOptionalString(baseData, "BedGUID")
-                : ReadOptionalString(ReadObject(configuration, "Bed"), "ObjectGUID");
-            var stationGuids = configuration.TryGetProperty("StationGUIDs", out _)
-                ? ReadStringArray(configuration, "StationGUIDs")
-                : ReadStringArray(ReadObject(configuration, "Stations"), "ObjectGUIDs");
+                : ReadConfigurationBedGuid(configuration);
+            var stationGuids = ReadConfigurationStationGuids(configuration);
+            var suppliesGuid = ReadConfigurationSuppliesGuid(configuration);
             // The warehouse has three packaging stations, so an employee may be
             // assigned zero to three. OC-7 logistics can leave an employee with
             // fewer than three stations (or none) plus a dock→interior route, so
@@ -134,7 +138,8 @@ public sealed record FishWarehouseEmployeeReplayDescriptor(
                 moveItem,
                 homeGuid,
                 stationGuids,
-                inventoryJson);
+                inventoryJson,
+                suppliesGuid);
             return true;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
@@ -144,10 +149,10 @@ public sealed record FishWarehouseEmployeeReplayDescriptor(
         }
     }
 
-    private static JsonElement ReadConfiguration(JsonElement root)
+    private static JsonElement? ReadConfigurationOrNull(JsonElement root)
     {
         if (!root.TryGetProperty("AdditionalDatas", out var additionalDatas) || additionalDatas.ValueKind != JsonValueKind.Array)
-            throw new JsonException("configuration-missing");
+            return null;
 
         foreach (var additionalData in additionalDatas.EnumerateArray())
         {
@@ -161,7 +166,60 @@ public sealed record FishWarehouseEmployeeReplayDescriptor(
             return ReadObjectValue(contents, "Configuration");
         }
 
-        throw new JsonException("configuration-missing");
+        return null;
+    }
+
+    // A missing Bed, Stations section, or Configuration entry is an
+    // unassigned-as-yet employee (just hired), not a corrupt record: it
+    // reads as no home / no stations, mirroring the inspector. Present-but-
+    // malformed values still fail the parse.
+    private static string ReadConfigurationBedGuid(JsonElement? configuration)
+    {
+        if (configuration is not { } configurationObject ||
+            !configurationObject.TryGetProperty("Bed", out var bed))
+            return string.Empty;
+
+        if (bed.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Bed-missing");
+
+        if (!bed.TryGetProperty("ObjectGUID", out _))
+            return string.Empty;
+
+        return ReadOptionalString(bed, "ObjectGUID");
+    }
+
+    private static IReadOnlyList<string> ReadConfigurationStationGuids(JsonElement? configuration)
+    {
+        if (configuration is not { } configurationObject)
+            return Array.AsReadOnly(Array.Empty<string>());
+
+        if (configurationObject.TryGetProperty("StationGUIDs", out _))
+            return ReadStringArray(configurationObject, "StationGUIDs");
+
+        // Packager/Chemist list Stations; the Botanist lists Pots and the
+        // Cleaner lists Bins. A configuration carries exactly one of them.
+        foreach (var listName in new[] { "Stations", "Pots", "Bins" })
+        {
+            if (configurationObject.TryGetProperty(listName, out _))
+                return ReadStringArray(ReadObject(configurationObject, listName), "ObjectGUIDs");
+        }
+
+        return Array.AsReadOnly(Array.Empty<string>());
+    }
+
+    private static string ReadConfigurationSuppliesGuid(JsonElement? configuration)
+    {
+        if (configuration is not { } configurationObject ||
+            !configurationObject.TryGetProperty("Supplies", out var supplies))
+            return string.Empty;
+
+        if (supplies.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Supplies-missing");
+
+        if (!supplies.TryGetProperty("ObjectGUID", out _))
+            return string.Empty;
+
+        return ReadOptionalString(supplies, "ObjectGUID");
     }
 
     private static string? ReadOptionalAdditionalData(JsonElement root, string name)
@@ -339,7 +397,8 @@ public sealed record FishWarehouseEmployeeReplayExpectedState(
     FishWarehouseEmployeeMoveItemState? MoveItem,
     string HomeGuid,
     IReadOnlyList<string> StationGuids,
-    string? InventoryJson = null);
+    string? InventoryJson = null,
+    string SuppliesGuid = "");
 
 public sealed record FishWarehouseEmployeeMoveItemState(
     string SourceGuid,
@@ -367,7 +426,8 @@ public sealed record FishWarehouseEmployeeReplayObservedState(
     bool PaidForToday,
     FishWarehouseEmployeeMoveItemState? MoveItem,
     string HomeGuid,
-    IReadOnlyList<string> StationGuids);
+    IReadOnlyList<string> StationGuids,
+    string SuppliesGuid = "");
 
 public interface IFishWarehouseNativeEmployeeReplayAdapter
 {

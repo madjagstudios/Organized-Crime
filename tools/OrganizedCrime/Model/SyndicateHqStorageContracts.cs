@@ -1,5 +1,3 @@
-using OrganizedCrime.Runtime;
-
 namespace OrganizedCrime.Model;
 
 public enum SyndicateHqStorageStatus
@@ -77,6 +75,7 @@ public sealed record SyndicateHqStorageResult(
 public static class SyndicateHqStorageContract
 {
     public const string ItemId = "hugestoragecloset";
+    public const string FamilyLockerDefinitionName = "HQ_PlayerLocker_J";
     public const int SlotCount = 20;
 
     public static IReadOnlyList<SyndicateHqStorageDefinition> Definitions { get; } = new[]
@@ -248,7 +247,7 @@ public static class SyndicateHqStorageAdmission
     public static SyndicateHqStorageResult Evaluate(SyndicateHqStorageContext context)
     {
         if (!context.IsCanonicalHost ||
-            !LocalPressureHostLifecyclePolicies.IsCanonicalPlayerIdentity(context.CanonicalPlayerId))
+            !LocalPressureHostIdentity.IsCanonicalPlayerIdentity(context.CanonicalPlayerId))
         {
             return new(SyndicateHqStorageStatus.NotCanonicalHost, "Canonical single-player host authority was unavailable.");
         }
@@ -270,7 +269,7 @@ public static class SyndicateHqStorageAdmission
     private static bool TryReadSaveIdentity(string path, out string identity)
     {
         identity = string.Empty;
-        if (!LocalPressureHostLifecyclePolicies.TryGetCanonicalHostIdentity(path, out var parsed) ||
+        if (!LocalPressureHostIdentity.TryGetCanonicalHostIdentity(path, out var parsed) ||
             string.IsNullOrWhiteSpace(parsed))
             return false;
         identity = parsed;

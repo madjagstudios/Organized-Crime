@@ -96,6 +96,128 @@ public sealed class FishWarehouseInteriorClosureDefinitionTests
     }
 
     [Fact]
+    public void Garage_jamb_reveal_is_planned_on_the_free_edge()
+    {
+        // The measured garage opening terminates at the west corner (min) and is free at max.
+        FishWarehouseGarageOpeningProjection projection = CreateGarageProjection();
+
+        IReadOnlyList<FishWarehouseClosurePiece> jambs =
+            FishWarehouseInteriorClosureDefinition.PlanGarageJambs(projection);
+
+        FishWarehouseClosurePiece jamb = Assert.Single(jambs, piece => piece.SemanticId == "garage-jamb-max");
+        Assert.Equal(FishWarehouseClosurePlane.WallX, jamb.Plane);
+        Assert.Equal(projection.Opening.HorizontalMaximum, jamb.PlaneCoordinate, 5);
+        // Spans the transition-prism depth from the authored north wall to the native plane,
+        // plus the overlap that tucks the outer edge behind the pillar.
+        Assert.Equal(FishWarehouseInteriorRoomDefinition.HalfDepth, jamb.HorizontalMinimum, 5);
+        Assert.Equal(
+            projection.TransitionPrism.MaximumZ + FishWarehouseInteriorClosureDefinition.GarageJambOverlap,
+            jamb.HorizontalMaximum,
+            5);
+        Assert.Equal(projection.Opening.Bottom, jamb.VerticalMinimum, 5);
+        Assert.Equal(FishWarehouseInteriorClosureDefinition.GarageHeaderTopY, jamb.VerticalMaximum, 5);
+        Assert.True(jamb.DoubleSided);
+        Assert.True(jamb.HasArea);
+    }
+
+    [Fact]
+    public void Garage_jambs_are_empty_for_a_null_projection()
+    {
+        Assert.Empty(FishWarehouseInteriorClosureDefinition.PlanGarageJambs(null));
+    }
+
+    [Fact]
+    public void Garage_jambs_span_both_edges_within_the_opening_planes_when_neither_is_corner_terminated()
+    {
+        var opening = new FishWarehouseWallOpening(
+            FishWarehouseInteriorDoorSide.North,
+            -7.0f,
+            -5.0f,
+            FishWarehouseInteriorRoomDefinition.FloorY,
+            4.35f,
+            SemanticId: "garage");
+        var prism = new FishWarehouseTransitionPrism(
+            -7.0f, -5.0f, 0f, 4.35f, FishWarehouseInteriorRoomDefinition.HalfDepth, 7.55f);
+        var projection = new FishWarehouseGarageOpeningProjection(
+            opening, -7.0f, -5.0f, 1.45f, prism, new FishWarehouseNavigationHorizontalBounds(0f, 2f));
+
+        IReadOnlyList<FishWarehouseClosurePiece> jambs =
+            FishWarehouseInteriorClosureDefinition.PlanGarageJambs(projection);
+
+        Assert.Equal(2, jambs.Count);
+        Assert.All(jambs, jamb =>
+        {
+            Assert.Equal(FishWarehouseClosurePlane.WallX, jamb.Plane);
+            Assert.True(jamb.PlaneCoordinate >= opening.HorizontalMinimum);
+            Assert.True(jamb.PlaneCoordinate <= opening.HorizontalMaximum);
+            Assert.Equal(FishWarehouseInteriorRoomDefinition.HalfDepth, jamb.HorizontalMinimum, 5);
+            Assert.Equal(prism.MaximumZ + FishWarehouseInteriorClosureDefinition.GarageJambOverlap, jamb.HorizontalMaximum, 5);
+            Assert.True(jamb.DoubleSided);
+            Assert.True(jamb.HasArea);
+        });
+        Assert.Contains(jambs, jamb => jamb.SemanticId == "garage-jamb-min" && jamb.PlaneCoordinate == opening.HorizontalMinimum);
+        Assert.Contains(jambs, jamb => jamb.SemanticId == "garage-jamb-max" && jamb.PlaneCoordinate == opening.HorizontalMaximum);
+    }
+
+    [Fact]
+    public void Garage_jamb_edges_terminated_at_corners_still_get_a_jamb()
+    {
+        // OC-110 owner run: the native wall stands ~0.7 m outside the authored west corner,
+        // so a corner-terminated edge reveals sky too and needs its jamb.
+        var opening = new FishWarehouseWallOpening(
+            FishWarehouseInteriorDoorSide.North,
+            -11.60f,
+            -7.64268f,
+            FishWarehouseInteriorRoomDefinition.FloorY,
+            4.35f,
+            IsCornerTerminatedAtMinimum: true,
+            IsCornerTerminatedAtMaximum: true,
+            SemanticId: "garage");
+        var prism = new FishWarehouseTransitionPrism(
+            -11.60f, -7.64268f, 0f, 4.35f, FishWarehouseInteriorRoomDefinition.HalfDepth, 7.55f);
+        var projection = new FishWarehouseGarageOpeningProjection(
+            opening, -11.7f, -7.5f, 1.45f, prism, new FishWarehouseNavigationHorizontalBounds(0f, 3.95732f));
+
+        IReadOnlyList<FishWarehouseClosurePiece> jambs =
+            FishWarehouseInteriorClosureDefinition.PlanGarageJambs(projection);
+        float capZ = FishWarehouseInteriorClosureDefinition.GarageCornerPillarFrontZ -
+            FishWarehouseInteriorClosureDefinition.GarageCornerCapSetback;
+
+        Assert.Equal(3, jambs.Count);
+        FishWarehouseClosurePiece max = Assert.Single(jambs, jamb => jamb.SemanticId == "garage-jamb-max");
+        Assert.Equal(opening.HorizontalMaximum, max.PlaneCoordinate, 5);
+        Assert.Equal(prism.MaximumZ + FishWarehouseInteriorClosureDefinition.GarageJambOverlap, max.HorizontalMaximum, 5);
+
+        // The west (min) corner jamb runs out to the native pillar's front face...
+        FishWarehouseClosurePiece min = Assert.Single(jambs, jamb => jamb.SemanticId == "garage-jamb-min");
+        Assert.Equal(opening.HorizontalMinimum, min.PlaneCoordinate, 5);
+        Assert.Equal(capZ, min.HorizontalMaximum, 5);
+
+        // ...and a front cap closes the slot between that jamb and the pillar, tucked into the pillar.
+        FishWarehouseClosurePiece cap = Assert.Single(jambs, jamb => jamb.SemanticId == "garage-corner-cap");
+        Assert.Equal(FishWarehouseClosurePlane.WallZ, cap.Plane);
+        Assert.Equal(capZ, cap.PlaneCoordinate, 5);
+        Assert.True(cap.HorizontalMinimum < FishWarehouseInteriorClosureDefinition.GarageCornerPillarInnerX);
+        Assert.Equal(opening.HorizontalMinimum, cap.HorizontalMaximum, 5);
+        Assert.Equal(FishWarehouseInteriorClosureDefinition.GarageCornerPillarTopY, cap.VerticalMaximum, 5);
+        Assert.True(cap.DoubleSided);
+        Assert.True(cap.HasArea);
+    }
+
+    [Fact]
+    public void Room_collider_mesh_contains_no_jamb_pieces()
+    {
+        // OC-4 gotcha guard: the room mesh doubles as its MeshCollider, so jamb
+        // reveals must never be planned into it. They live in the separate
+        // collider-free jamb object instead.
+        string roomHost = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(), "tools", "OrganizedCrime", "Runtime", "FishWarehouseInteriorRoomHost.cs"));
+
+        Assert.DoesNotContain("PlanGarageJambs", roomHost);
+        Assert.DoesNotContain("garage-jamb", roomHost);
+    }
+
+    [Fact]
     public void Closure_pieces_never_have_zero_area()
     {
         var personnel = new FishWarehouseWallOpening(
@@ -113,6 +235,14 @@ public sealed class FishWarehouseInteriorClosureDefinitionTests
             Assert.True(piece.Width > FishWarehouseWallOpeningPlanner.Epsilon);
             Assert.True(piece.Height > FishWarehouseWallOpeningPlanner.Epsilon);
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "tools", "OrganizedCrime", "OrganizedCrime.csproj")))
+            directory = directory.Parent;
+        return directory?.FullName ?? throw new InvalidOperationException("repository root not found");
     }
 
     private static FishWarehouseGarageOpeningProjection CreateGarageProjection(float openingTop = 4.35f)

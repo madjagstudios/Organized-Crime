@@ -40,6 +40,7 @@ internal sealed class NativeLawResponseModComposition : IDisposable
         runtimeFactory ??= (adapter, factory, log, sink) => CreateRuntime(adapter, factory, log, sink, receiptLog);
 
         var nativeAdapter = new NativePoliceDispatchAdapter(HostAdapter, warningLog);
+        LawResponseAdapter = nativeAdapter;
         Controller = controllerFactory(
             new NativeLawResponseAdmissionGate(),
             nativeAdapter,
@@ -62,6 +63,7 @@ internal sealed class NativeLawResponseModComposition : IDisposable
 
     public ILocalPressureRuntimeHostAdapter HostAdapter { get; }
     public NativeLawResponseController Controller { get; }
+    public INativeLawResponseAdapter LawResponseAdapter { get; }
     public Release1ChiefTierObserver ChiefObserver { get; }
     public ILocalPressureTierTransitionSink TierTransitionSink { get; }
     public LocalPressureRuntimeComposition LocalPressureRuntime { get; }

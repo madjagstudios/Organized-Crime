@@ -273,10 +273,12 @@ public sealed class FishWarehouseEmployeeReplayHostTests
         const string existingRawJson = "{\"older\":true,\"spacing\":\"must remain\"}";
         const string capturedRawJson = "{ \"newer\" : false }";
         var messages = new List<string>();
+        // Handler is the game's real reserved-but-unshipped type: no
+        // HandlerData exists, so it stays unsupported and preserved.
         var descriptor = new FishWarehouseEmployeeReplayDescriptor(
             "00000000-0000-0000-0000-000000000666",
-            "BotanistData",
-            "Botanist",
+            "HandlerData",
+            "HandlerData",
             capturedRawJson);
         var existing = new FishWarehouseUnsupportedEmployeeRecord(
             descriptor.Guid,
@@ -298,6 +300,186 @@ public sealed class FishWarehouseEmployeeReplayHostTests
         Assert.Contains(messages, message =>
             message.Contains("unsupported", StringComparison.OrdinalIgnoreCase) &&
             message.Contains(descriptor.Guid, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Replay_replays_the_real_chemist_record()
+    {
+        // The sanitized OC-128 preserved Chemist now replays instead of being
+        // preserved: Bed plus (empty) Stations through the primary path.
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            "11111111-1111-1111-1111-111111111111",
+            "ChemistData",
+            "Chemist",
+            ChemistWrappedEmployeeRawJson);
+        var adapter = new FakeAdapter { Observation = CreateObservation(descriptor) };
+        var host = new FishWarehouseEmployeeReplayHost(
+            adapter,
+            new[] { descriptor },
+            Array.Empty<FishWarehouseUnsupportedEmployeeRecord>(),
+            () => 0f,
+            _ => { });
+
+        var result = host.Replay(navigationReady: true);
+
+        Assert.Equal(FishWarehouseEmployeeReplayState.Succeeded, result.State);
+        Assert.Equal(1, result.SupportedCapturedEmployeeCount);
+        Assert.Equal(1, result.ReplayedEmployeeCount);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Chemist"]);
+        Assert.Empty(result.UnsupportedEmployees);
+        Assert.Equal(1, adapter.PrimaryLoadCalls);
+    }
+
+    [Fact]
+    public void Replay_replays_a_botanist_with_pots_and_supplies()
+    {
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            "88888888-8888-8888-8888-888888888888",
+            "BotanistData",
+            "Botanist",
+            BotanistMeasuredRawJson);
+        var adapter = new FakeAdapter { Observation = CreateObservation(descriptor) };
+        var host = new FishWarehouseEmployeeReplayHost(
+            adapter,
+            new[] { descriptor },
+            Array.Empty<FishWarehouseUnsupportedEmployeeRecord>(),
+            () => 0f,
+            _ => { });
+
+        var result = host.Replay(navigationReady: true);
+
+        Assert.Equal(FishWarehouseEmployeeReplayState.Succeeded, result.State);
+        Assert.Equal(1, result.ReplayedEmployeeCount);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Botanist"]);
+        Assert.Empty(result.UnsupportedEmployees);
+    }
+
+    [Fact]
+    public void Replay_replays_a_cleaner_with_bins()
+    {
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            "99999999-9999-9999-9999-999999999999",
+            "CleanerData",
+            "Cleaner",
+            CleanerMeasuredRawJson);
+        var adapter = new FakeAdapter { Observation = CreateObservation(descriptor) };
+        var host = new FishWarehouseEmployeeReplayHost(
+            adapter,
+            new[] { descriptor },
+            Array.Empty<FishWarehouseUnsupportedEmployeeRecord>(),
+            () => 0f,
+            _ => { });
+
+        var result = host.Replay(navigationReady: true);
+
+        Assert.Equal(FishWarehouseEmployeeReplayState.Succeeded, result.State);
+        Assert.Equal(1, result.ReplayedEmployeeCount);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Cleaner"]);
+        Assert.Empty(result.UnsupportedEmployees);
+    }
+
+    [Fact]
+    public void Replay_restores_a_preserved_chemist_through_fallback_creation()
+    {
+        // A Chemist kept in the sidecar's unsupported list replays on the next
+        // load: no typed payload exists, so the primary loader is skipped and
+        // the employee is created and configured through fallback instead.
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            "11111111-1111-1111-1111-111111111111",
+            "ChemistData",
+            "Chemist",
+            ChemistWrappedEmployeeRawJson,
+            RequiresFallbackCreation: true);
+        var adapter = new FakeAdapter { Observation = CreateObservation(descriptor) };
+        var host = new FishWarehouseEmployeeReplayHost(
+            adapter,
+            new[] { descriptor },
+            Array.Empty<FishWarehouseUnsupportedEmployeeRecord>(),
+            () => 0f,
+            _ => { });
+
+        host.Replay(navigationReady: true);
+        var result = host.Replay(navigationReady: true);
+
+        Assert.Equal(FishWarehouseEmployeeReplayState.Succeeded, result.State);
+        Assert.Equal(1, result.ReplayedEmployeeCount);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Chemist"]);
+        Assert.Empty(result.UnsupportedEmployees);
+        Assert.Equal(0, adapter.PrimaryLoadCalls);
+        Assert.Equal(1, adapter.FallbackCreationCalls);
+        Assert.Equal(1, adapter.FallbackConfigurationCalls);
+    }
+
+    [Fact]
+    public void Failed_preserved_restore_keeps_the_record_preserved()
+    {
+        var descriptor = new FishWarehouseEmployeeReplayDescriptor(
+            "11111111-1111-1111-1111-111111111111",
+            "ChemistData",
+            "Chemist",
+            ChemistWrappedEmployeeRawJson,
+            RequiresFallbackCreation: true);
+        var adapter = new FakeAdapter
+        {
+            Observation = CreateObservation(descriptor),
+            FallbackCreationResult = FishWarehouseEmployeeFallbackCreationResult.Failed,
+        };
+        var host = new FishWarehouseEmployeeReplayHost(
+            adapter,
+            new[] { descriptor },
+            Array.Empty<FishWarehouseUnsupportedEmployeeRecord>(),
+            () => 0f,
+            _ => { });
+
+        var result = host.Replay(navigationReady: true);
+
+        Assert.Equal(FishWarehouseEmployeeReplayState.Failed, result.State);
+        Assert.False(result.CanAdvanceEmployeesReplayed);
+        Assert.Equal(0, result.ReplayedEmployeeCount);
+        var kept = Assert.Single(result.UnsupportedEmployees);
+        Assert.Equal("11111111-1111-1111-1111-111111111111", kept.Guid);
+        Assert.Equal("ChemistData", kept.DataType);
+        Assert.Equal(ChemistWrappedEmployeeRawJson, kept.RawJson);
+    }
+
+    [Fact]
+    public void Replay_reports_per_identity_replay_counts()
+    {
+        var botanist = new FishWarehouseEmployeeReplayDescriptor(
+            "88888888-8888-8888-8888-888888888888", "BotanistData", "Botanist", BotanistMeasuredRawJson);
+        var chemist = new FishWarehouseEmployeeReplayDescriptor(
+            "11111111-1111-1111-1111-111111111111", "ChemistData", "Chemist", ChemistWrappedEmployeeRawJson);
+        var cleaner = new FishWarehouseEmployeeReplayDescriptor(
+            "99999999-9999-9999-9999-999999999999", "CleanerData", "Cleaner", CleanerMeasuredRawJson);
+        var packager = new FishWarehouseEmployeeReplayDescriptor(
+            "00000000-0000-0000-0000-000000000111", "PackagerData", "Packager", MeasuredPackagerRawJson);
+        var adapter = new FakeAdapter
+        {
+            Observations = new Dictionary<string, FishWarehouseEmployeeReplayObservedState>(StringComparer.OrdinalIgnoreCase)
+            {
+                [botanist.Guid] = CreateObservation(botanist),
+                [chemist.Guid] = CreateObservation(chemist),
+                [cleaner.Guid] = CreateObservation(cleaner),
+                [packager.Guid] = CreateObservation(packager),
+            },
+        };
+        var host = new FishWarehouseEmployeeReplayHost(
+            adapter,
+            new[] { botanist, chemist, cleaner, packager },
+            Array.Empty<FishWarehouseUnsupportedEmployeeRecord>(),
+            () => 0f,
+            _ => { });
+
+        var result = host.Replay(navigationReady: true);
+
+        Assert.Equal(FishWarehouseEmployeeReplayState.Succeeded, result.State);
+        Assert.Equal(4, result.SupportedCapturedEmployeeCount);
+        Assert.Equal(4, result.ReplayedEmployeeCount);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Botanist"]);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Chemist"]);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Cleaner"]);
+        Assert.Equal(1, result.ReplayedEmployeesByIdentity!["Packager"]);
+        Assert.Empty(result.UnsupportedEmployees);
     }
 
     [Fact]
@@ -396,9 +578,12 @@ public sealed class FishWarehouseEmployeeReplayHostTests
         return new FishWarehouseEmployeeReplayDescriptor(employeeGuid, "PackagerData", "Packager", rawJson);
     }
 
-    private static FishWarehouseEmployeeReplayObservedState CreateObservation(int index)
+    private static FishWarehouseEmployeeReplayObservedState CreateObservation(int index) =>
+        CreateObservation(CreateDescriptor(index));
+
+    private static FishWarehouseEmployeeReplayObservedState CreateObservation(
+        FishWarehouseEmployeeReplayDescriptor descriptor)
     {
-        var descriptor = CreateDescriptor(index);
         var expected = AssertParse(descriptor);
         return new FishWarehouseEmployeeReplayObservedState(
             IsAlive: true,
@@ -420,7 +605,8 @@ public sealed class FishWarehouseEmployeeReplayHostTests
             PaidForToday: expected.PaidForToday,
             MoveItem: expected.MoveItem,
             HomeGuid: expected.HomeGuid,
-            StationGuids: expected.StationGuids);
+            StationGuids: expected.StationGuids,
+            SuppliesGuid: expected.SuppliesGuid);
     }
 
     private static FishWarehouseEmployeeReplayExpectedState AssertParse(
@@ -588,6 +774,55 @@ public sealed class FishWarehouseEmployeeReplayHostTests
           },
           "AdditionalDatas":[
             {"Name":"Configuration","Contents":{"StationGUIDs":["00000000-0000-0000-0000-000000000333","00000000-0000-0000-0000-000000000444","00000000-0000-0000-0000-000000000555"]}}
+          ]
+        }
+        """;
+
+    // The ChemistData employee record from the sanitized OC-128 preserved
+    // file: 0.4.7 wrapped BaseData with no Identity key.
+    private const string ChemistWrappedEmployeeRawJson = """
+        {"DataType":"ChemistData","DataVersion":0,"GameVersion":"0.4.7f6","BaseData":"{\"DataType\":\"ChemistData\",\"DataVersion\":0,\"GameVersion\":\"0.4.7f6\",\"ID\":\"test_chemist\",\"AssignedProperty\":\"oc_fishwarehouse\",\"FirstName\":\"Test\",\"LastName\":\"Chemist\",\"IsMale\":true,\"AppearanceIndex\":6,\"Position\":{\"x\":1,\"y\":2,\"z\":3},\"Rotation\":{\"x\":0,\"y\":0,\"z\":0,\"w\":1},\"GUID\":\"11111111-1111-1111-1111-111111111111\",\"PaidForToday\":false,\"MoveItemData\":{\"TemplateItemJSON\":\"\",\"GrabbedItemQuantity\":0,\"SourceGUID\":\"\",\"DestinationGUID\":\"\"}}","AdditionalDatas":[{"Name":"Relationship","Contents":"{\"RelationDelta\":0}"},{"Name":"Configuration","Contents":"{\"DataType\":\"ChemistConfigurationData\",\"Bed\":{\"ObjectGUID\":\"22222222-2222-2222-2222-222222222222\"},\"Stations\":{\"ObjectGUIDs\":[]}}"}]}
+        """;
+
+    private const string BotanistMeasuredRawJson = """
+        {
+          "DataType":"BotanistData",
+          "BaseData":{
+            "GUID":"88888888-8888-8888-8888-888888888888",
+            "ID":"botanist-1",
+            "FirstName":"Fern",
+            "LastName":"Foliage",
+            "IsMale":false,
+            "AppearanceIndex":3,
+            "Position":{"x":1,"y":2,"z":3},
+            "Rotation":{"x":0,"y":0,"z":0,"w":1},
+            "AssignedProperty":"oc_fishwarehouse",
+            "PaidForToday":true,
+            "BedGUID":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+          },
+          "AdditionalDatas":[
+            {"Name":"Configuration","Contents":{"Bed":{"ObjectGUID":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},"Supplies":{"ObjectGUID":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"},"Pots":{"ObjectGUIDs":["cccccccc-cccc-cccc-cccc-cccccccccccc"]}}}
+          ]
+        }
+        """;
+
+    private const string CleanerMeasuredRawJson = """
+        {
+          "DataType":"CleanerData",
+          "BaseData":{
+            "GUID":"99999999-9999-9999-9999-999999999999",
+            "ID":"cleaner-1",
+            "FirstName":"Mop",
+            "LastName":"Bucket",
+            "IsMale":true,
+            "AppearanceIndex":9,
+            "Position":{"x":4,"y":5,"z":6},
+            "Rotation":{"x":0,"y":0,"z":0,"w":1},
+            "AssignedProperty":"oc_fishwarehouse",
+            "PaidForToday":false
+          },
+          "AdditionalDatas":[
+            {"Name":"Configuration","Contents":{"Bed":{"ObjectGUID":"dddddddd-dddd-dddd-dddd-dddddddddddd"},"Bins":{"ObjectGUIDs":["eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee","ffffffff-ffff-ffff-ffff-ffffffffffff"]}}}
           ]
         }
         """;

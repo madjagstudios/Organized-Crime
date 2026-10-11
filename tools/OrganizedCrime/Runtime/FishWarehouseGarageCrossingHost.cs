@@ -276,11 +276,13 @@ public sealed class FishWarehouseGarageCrossingHost
             NavMeshAgent? agent = null;
             try
             {
+                // 0.4.7 made the agent private (_agent); a GetComponent lookup is unsafe because
+                // the agent sits on the prefab root while NPCMovement may be on a child.
                 if (employee is not null && employee != null &&
                     employee.Movement is not null && employee.Movement != null &&
-                    employee.Movement.Agent is not null && employee.Movement.Agent != null)
+                    employee.Movement._agent is not null && employee.Movement._agent != null)
                 {
-                    agent = employee.Movement.Agent;
+                    agent = employee.Movement._agent;
                 }
             }
             catch

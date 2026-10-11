@@ -1,3 +1,4 @@
+using OrganizedCrime.Model;
 using S1API.Quests;
 using S1API.Quests.Constants;
 using UnityEngine;

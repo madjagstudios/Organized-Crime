@@ -25,7 +25,21 @@ public sealed class Release1ChiefWalletDebitTests
     public void Negative_infinity_is_rejected() => AssertRejectedNoChange(float.NegativeInfinity);
 
     [Fact]
-    public void Below_the_maximum_debit_is_rejected() => AssertRejectedNoChange(-25_001f);
+    public void Below_the_maximum_debit_is_rejected() => AssertRejectedNoChange(-35_001f);
+
+    [Fact]
+    public void The_capped_third_demand_is_within_the_wallet_bound()
+    {
+        var access = new FakeAccess { Cash = 100_000f };
+        var world = new S1ApiRelease1SmallCourtesyWorld(new FakeContext(), access);
+
+        Assert.Equal((float)Release1ChiefDemandLadder.Cap, S1ApiRelease1SmallCourtesyWorld.MaximumWalletDebit);
+        var status = world.TryDebitCashBalance(-35_000f);
+
+        Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Succeeded, status);
+        Assert.Equal(1, access.ChangeCalls);
+        Assert.Equal(-35_000f, access.LastChangeAmount);
+    }
 
     [Fact]
     public void A_debit_larger_than_the_pre_balance_is_rejected_with_no_native_call()
@@ -70,11 +84,11 @@ public sealed class Release1ChiefWalletDebitTests
         var access = new FakeAccess { Cash = 100_000f };
         var world = new S1ApiRelease1SmallCourtesyWorld(new FakeContext(), access);
 
-        var status = world.TryDebitCashBalance(-15_000f);
+        var status = world.TryDebitCashBalance(-25_000f);
 
         Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Succeeded, status);
         Assert.Equal(1, access.ChangeCalls);
-        Assert.Equal(-15_000f, access.LastChangeAmount);
+        Assert.Equal(-25_000f, access.LastChangeAmount);
     }
 
     [Fact]
@@ -83,7 +97,7 @@ public sealed class Release1ChiefWalletDebitTests
         var access = new FakeAccess { Cash = 100_000f, ThrowOnChange = true };
         var world = new S1ApiRelease1SmallCourtesyWorld(new FakeContext(), access);
 
-        var status = world.TryDebitCashBalance(-15_000f);
+        var status = world.TryDebitCashBalance(-25_000f);
 
         Assert.Equal(Release1SmallCourtesyWorldMutationStatus.Ambiguous, status);
     }

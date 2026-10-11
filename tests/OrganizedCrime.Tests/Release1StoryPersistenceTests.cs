@@ -55,7 +55,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("smallCourtesyAssignments");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.PhonePresentationAttempts);
         Assert.Empty(envelope.Story.SmallCourtesyAssignments);
     }
@@ -69,7 +69,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("smallCourtesyAssignments");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.SmallCourtesyAssignments);
     }
 
@@ -82,7 +82,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("presentationReceipts");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.PresentationReceipts);
     }
 
@@ -96,7 +96,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("wrongAddressProgress");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.WrongAddressAssignments);
         Assert.Empty(envelope.Story.WrongAddressProgress);
     }
@@ -166,8 +166,8 @@ public sealed class Release1StoryPersistenceTests
         Assert.True(Release1StorySaveCodec.TrySerialize(story, out var json, out var encoded), encoded.Message);
         using var document = JsonDocument.Parse(json);
 
-        Assert.Equal(11, Release1StorySaveCodec.CurrentSchemaVersion);
-        Assert.Equal(11, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(14, Release1StorySaveCodec.CurrentSchemaVersion);
+        Assert.Equal(14, document.RootElement.GetProperty("schemaVersion").GetInt32());
         Assert.True(Release1StorySaveCodec.TryDeserialize(json, out var decoded, out var decodeResult), decodeResult.Message);
         Assert.Equal(assignment, Assert.Single(decoded!.Story!.SmallCourtesyAssignments));
     }
@@ -184,8 +184,8 @@ public sealed class Release1StoryPersistenceTests
         Assert.True(Release1StorySaveCodec.TrySerialize(story, out var json, out var encoded), encoded.Message);
         using var document = JsonDocument.Parse(json);
 
-        Assert.Equal(11, Release1StorySaveCodec.CurrentSchemaVersion);
-        Assert.Equal(11, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(14, Release1StorySaveCodec.CurrentSchemaVersion);
+        Assert.Equal(14, document.RootElement.GetProperty("schemaVersion").GetInt32());
         Assert.True(Release1StorySaveCodec.TryDeserialize(json, out var decoded, out var decodeResult), decodeResult.Message);
         Assert.Equal(receipt, Assert.Single(decoded!.Story!.PresentationReceipts));
     }
@@ -244,23 +244,23 @@ public sealed class Release1StoryPersistenceTests
     }
 
     [Fact]
-    public void The_current_schema_version_is_eleven_and_reads_one_through_eleven()
+    public void The_current_schema_version_is_fourteen_and_reads_one_through_fourteen()
     {
-        Assert.Equal(11, Release1StorySaveCodec.CurrentSchemaVersion);
+        Assert.Equal(14, Release1StorySaveCodec.CurrentSchemaVersion);
 
         Assert.True(Release1StorySaveCodec.TrySerialize(Story(), out var currentJson, out var encoded), encoded.Message);
-        for (var version = 1; version <= 11; version++)
+        for (var version = 1; version <= 14; version++)
         {
             var root = JsonNode.Parse(currentJson)!.AsObject();
             root["schemaVersion"] = version;
             Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-            Assert.Equal(11, envelope!.SchemaVersion);
+            Assert.Equal(14, envelope!.SchemaVersion);
         }
 
-        var twelve = JsonNode.Parse(currentJson)!.AsObject();
-        twelve["schemaVersion"] = 12;
-        Assert.False(Release1StorySaveCodec.TryDeserialize(twelve.ToJsonString(), out _, out var twelveResult));
-        Assert.Equal(Release1StoryCodecFailureReason.UnsupportedSchema, twelveResult.Reason);
+        var fifteen = JsonNode.Parse(currentJson)!.AsObject();
+        fifteen["schemaVersion"] = 15;
+        Assert.False(Release1StorySaveCodec.TryDeserialize(fifteen.ToJsonString(), out _, out var fifteenResult));
+        Assert.Equal(Release1StoryCodecFailureReason.UnsupportedSchema, fifteenResult.Reason);
     }
 
     [Fact]
@@ -274,7 +274,7 @@ public sealed class Release1StoryPersistenceTests
         Assert.True(Release1StorySaveCodec.TrySerialize(story, out var json, out var write), write.Message);
         Assert.True(Release1StorySaveCodec.TryDeserialize(json, out var envelope, out var read), read.Message);
 
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Equal(assignment, Assert.Single(envelope.Story!.ShortNoticeAssignments));
         Assert.Equal(progress, Assert.Single(envelope.Story.ShortNoticeProgress));
     }
@@ -296,7 +296,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("shortNoticeProgress");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.ShortNoticeAssignments);
         Assert.Empty(envelope.Story.ShortNoticeProgress);
         if (version == 6)
@@ -330,7 +330,7 @@ public sealed class Release1StoryPersistenceTests
         Assert.True(Release1StorySaveCodec.TrySerialize(story, out var json, out var write), write.Message);
         Assert.True(Release1StorySaveCodec.TryDeserialize(json, out var envelope, out var read), read.Message);
 
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         var restored = Assert.Single(envelope.Story!.KeepTheLightsOffAssignments);
         Assert.Equal(assignment, restored);
         Assert.Equal(4, restored.ExpectedOwnedPropertyCount);
@@ -355,7 +355,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("keepTheLightsOffProgress");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.KeepTheLightsOffAssignments);
         Assert.Empty(envelope.Story.KeepTheLightsOffProgress);
         if (version == 7)
@@ -399,7 +399,7 @@ public sealed class Release1StoryPersistenceTests
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(json, out var envelope, out var decoded), decoded.Message);
 
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.KeepTheLightsOffAssignments);
         Assert.Empty(envelope.Story.KeepTheLightsOffProgress);
         Assert.Single(envelope.Story.WrongAddressAssignments);
@@ -463,7 +463,7 @@ public sealed class Release1StoryPersistenceTests
         Assert.True(Release1StorySaveCodec.TrySerialize(story, out var json, out var write), write.Message);
         Assert.True(Release1StorySaveCodec.TryDeserialize(json, out var envelope, out var read), read.Message);
 
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         var restored = Assert.Single(envelope.Story!.TheEnvelopeAssignments);
         Assert.Equal(assignment, restored);
         Assert.Equal(Release1RoomWithNoNameAssignment.SyndicateHqRoomKey, restored.HoldRoomKey);
@@ -512,7 +512,7 @@ public sealed class Release1StoryPersistenceTests
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
 
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.TheEnvelopeAssignments);
         Assert.Empty(envelope.Story.TheEnvelopeProgress);
     }
@@ -559,7 +559,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("theEnvelopeProgress");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.TheEnvelopeAssignments);
         Assert.Empty(envelope.Story.TheEnvelopeProgress);
         if (version == 6) Assert.Single(envelope.Story.RoomWithNoNameAssignments);
@@ -578,7 +578,7 @@ public sealed class Release1StoryPersistenceTests
         root["story"]!.AsObject().Remove("theEnvelopeProgress");
 
         Assert.True(Release1StorySaveCodec.TryDeserialize(root.ToJsonString(), out var envelope, out var decoded), decoded.Message);
-        Assert.Equal(11, envelope!.SchemaVersion);
+        Assert.Equal(14, envelope!.SchemaVersion);
         Assert.Empty(envelope.Story!.KeepTheLightsOffAssignments);
         Assert.Empty(envelope.Story.KeepTheLightsOffProgress);
         Assert.Empty(envelope.Story.TheEnvelopeAssignments);
@@ -588,13 +588,13 @@ public sealed class Release1StoryPersistenceTests
     }
 
     [Fact]
-    public void Writing_always_emits_schema_version_11()
+    public void Writing_always_emits_schema_version_14()
     {
         Assert.True(Release1StorySaveCodec.TrySerialize(Story(), out var json, out var encoded), encoded.Message);
         using var document = JsonDocument.Parse(json);
 
-        Assert.Equal(11, Release1StorySaveCodec.CurrentSchemaVersion);
-        Assert.Equal(11, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(14, Release1StorySaveCodec.CurrentSchemaVersion);
+        Assert.Equal(14, document.RootElement.GetProperty("schemaVersion").GetInt32());
     }
 
     [Fact]

@@ -55,17 +55,41 @@ public sealed class Release1ChiefTierObserverTests
     }
 
     [Fact]
-    public void A_drain_for_the_wrong_player_epoch_or_load_epoch_returns_false_and_leaves_the_queue_intact()
+    public void A_drain_for_the_wrong_player_epoch_or_load_epoch_skips_the_stale_heads()
+    {
+        // OC-77. A mismatched head used to wedge the queue: every drain returned false and left
+        // it, so a stale entry starved everything behind it forever. Skipped heads count with
+        // the overflow drops, which the service already reports once per load.
+        foreach (var drain in new Func<Release1ChiefTierObserver, bool>[]
+        {
+            o => o.TryDequeue("player-2", SessionEpoch, 4, out _),
+            o => o.TryDequeue("player-1", Guid.NewGuid(), 4, out _),
+            o => o.TryDequeue("player-1", SessionEpoch, 5, out _),
+        })
+        {
+            var observer = new Release1ChiefTierObserver();
+            observer.Publish(Note(LocalPressureTier.Noticed, LocalPressureTier.Watched));
+
+            Assert.False(drain(observer));
+            Assert.Equal(0, observer.QueueDepth);
+            Assert.Equal(2, observer.DroppedCount);
+        }
+    }
+
+    [Fact]
+    public void A_matching_event_behind_a_stale_head_is_reached_and_the_head_is_counted()
     {
         var observer = new Release1ChiefTierObserver();
+        observer.Publish(Note(LocalPressureTier.Quiet, LocalPressureTier.Quiet, playerId: "player-9"));
         observer.Publish(Note(LocalPressureTier.Noticed, LocalPressureTier.Watched));
 
-        Assert.False(observer.TryDequeue("player-2", SessionEpoch, 4, out _));
-        Assert.Equal(2, observer.QueueDepth);
-        Assert.False(observer.TryDequeue("player-1", Guid.NewGuid(), 4, out _));
-        Assert.Equal(2, observer.QueueDepth);
-        Assert.False(observer.TryDequeue("player-1", SessionEpoch, 5, out _));
-        Assert.Equal(2, observer.QueueDepth);
+        Assert.True(observer.TryDequeue("player-1", SessionEpoch, 4, out var first));
+        Assert.Equal(Release1ChiefObservedEvent.ArrestObserved, first.Kind);
+        Assert.Equal(1, observer.QueueDepth);
+        Assert.Equal(1, observer.DroppedCount);
+        Assert.True(observer.TryDequeue("player-1", SessionEpoch, 4, out var second));
+        Assert.Equal(Release1ChiefObservedEvent.RoseToWatched, second.Kind);
+        Assert.Equal(0, observer.QueueDepth);
     }
 
     [Fact]
@@ -106,6 +130,7 @@ public sealed class Release1ChiefTierObserverTests
         LocalPressureTier previous,
         LocalPressureTier current,
         string correlationId = "corr-1",
-        long loadEpoch = 4) =>
-        new(SessionEpoch, loadEpoch, "player-1", null, correlationId, previous, current, null, null);
+        long loadEpoch = 4,
+        string playerId = "player-1") =>
+        new(SessionEpoch, loadEpoch, playerId, null, correlationId, previous, current, null, null);
 }

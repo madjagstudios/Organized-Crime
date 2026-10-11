@@ -229,6 +229,26 @@ public sealed class FishWarehousePersistenceReplayServiceTests
     }
 
     [Fact]
+    public void A_second_load_restores_only_after_prepare_for_load_resets_the_load_gate()
+    {
+        // OC-108: a same-session reload runs PreLoad then LoadComplete again. Without the
+        // PreLoad reset the second LoadComplete is swallowed and the warehouse never restores.
+        var operations = new FakeOperations();
+        var service = CreateService(
+            operations,
+            captureResult: new FishWarehousePropertyCaptureResult(FishWarehousePropertyCaptureState.Inactive),
+            state: FishWarehouseSaveState.OwnedState());
+
+        service.HandleLoadComplete();
+        service.HandleLoadComplete();
+        Assert.Single(operations.Calls, call => call == "request-restore");
+
+        service.PrepareForLoad();
+        service.HandleLoadComplete();
+        Assert.Equal(2, operations.Calls.Count(call => call == "request-restore"));
+    }
+
+    [Fact]
     public void Failed_checkpoint_is_rearmed_when_load_capture_is_valid()
     {
         var operations = new FakeOperations();
@@ -355,6 +375,27 @@ public sealed class FishWarehousePersistenceReplayServiceTests
         Assert.Equal(rawJson, Assert.Single(descriptors).RawJson);
     }
 
+    [Fact]
+    public void Replay_operation_throw_logs_the_exception_detail_once()
+    {
+        var operations = new FakeOperations
+        {
+            RuntimeReady = true,
+            NavigationReady = true,
+            ObjectReplayThrow = new InvalidOperationException("replay boom"),
+        };
+        var logs = new List<string>();
+        var service = CreateService(operations, logs: logs);
+        service.HandleLoadComplete();
+        service.Update();
+        service.Update();
+
+        Assert.Equal(FishWarehouseReplayPhase.Failed, service.Phase);
+        Assert.Equal("object replay threw.", service.FailureReason);
+        Assert.Single(logs, line => line.Contains("InvalidOperationException", StringComparison.Ordinal));
+        Assert.Contains(logs, line => line.Contains("object replay threw.", StringComparison.Ordinal));
+    }
+
     private static FishWarehousePersistenceReplayService CreateService(
         FakeOperations operations,
         Func<FishWarehouseReplayCheckpoint, bool>? persistCheckpoint = null,
@@ -365,7 +406,8 @@ public sealed class FishWarehousePersistenceReplayServiceTests
         FishWarehouseSaveState? state = null,
         Action? dropTypedReferences = null,
         Action? resetDeliveries = null,
-        Action? teardownRuntime = null)
+        Action? teardownRuntime = null,
+        List<string>? logs = null)
     {
         lifecycle ??= new FishWarehouseReplayLifecycle();
         var checkpoint = Checkpoint("generation-a", "folder-a");
@@ -388,7 +430,8 @@ public sealed class FishWarehousePersistenceReplayServiceTests
             dropTypedReferences,
             resetDeliveries,
             teardownRuntime,
-            saveFolderKey: folder => folder);
+            saveFolderKey: folder => folder,
+            log: logs is null ? (_ => { }) : logs.Add);
     }
 
     private static FishWarehouseReplayCheckpoint Checkpoint(string generationId, string folderKey) =>
@@ -406,6 +449,7 @@ public sealed class FishWarehousePersistenceReplayServiceTests
         public bool RuntimeReady { get; set; }
         public bool NavigationReady { get; set; }
         public FishWarehouseReplayOperationResult ObjectReplay { get; set; } = FishWarehouseReplayOperationResult.Succeeded(2);
+        public Exception? ObjectReplayThrow { get; set; }
         public FishWarehouseReplayOperationResult MarkObjectsResult { get; set; } = FishWarehouseReplayOperationResult.Succeeded(0);
         public FishWarehouseReplayOperationResult EmployeeReplay { get; set; } = FishWarehouseReplayOperationResult.Succeeded(1);
         public FishWarehouseDeliveryRestoreFlushResult DeliveryReplay { get; set; } = new(0, null);
@@ -419,6 +463,8 @@ public sealed class FishWarehousePersistenceReplayServiceTests
         {
             Calls.Add("replay-objects");
             Order?.Add("replay-objects");
+            if (ObjectReplayThrow is not null)
+                throw ObjectReplayThrow;
             return ObjectReplay;
         }
 

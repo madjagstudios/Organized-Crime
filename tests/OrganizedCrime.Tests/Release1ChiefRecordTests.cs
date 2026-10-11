@@ -46,9 +46,9 @@ public sealed class Release1ChiefRecordTests
     }
 
     [Theory]
-    [InlineData(1, 15000)]
-    [InlineData(2, 20000)]
-    [InlineData(3, 25000)]
+    [InlineData(1, 25000)]
+    [InlineData(2, 30000)]
+    [InlineData(3, 35000)]
     public void Demand_reads_the_ladder(int round, int expected)
     {
         Assert.Equal(expected, Open(round).Demand);
@@ -136,6 +136,61 @@ public sealed class Release1ChiefRecordTests
         var left = Paying(2) with { WatchLinesSent = 1 };
         var right = Paying(2) with { WatchLinesSent = 1 };
         var different = Paying(2) with { WatchLinesSent = 2 };
+
+        Assert.True(left.ValueEquals(right));
+        Assert.Equal(left.GetHashCode(), right.GetHashCode());
+        Assert.False(left.ValueEquals(different));
+    }
+
+    [Fact]
+    public void Adopt_leaves_the_late_fee_marker_unset()
+    {
+        var record = Release1ChiefRecord.Adopt(LocalPressureTier.Quiet, false);
+
+        Assert.Null(record.LastLateFeeChargedDay);
+    }
+
+    [Fact]
+    public void A_negative_late_fee_day_throws()
+    {
+        Assert.Throws<ArgumentException>(() => (Open(1) with { LastLateFeeChargedDay = -1 }).Validate());
+        (Open(1) with { LastLateFeeChargedDay = 0 }).Validate();
+    }
+
+    [Fact]
+    public void Value_equality_includes_the_late_fee_marker()
+    {
+        var left = Open(1) with { LastLateFeeChargedDay = 5 };
+        var right = Open(1) with { LastLateFeeChargedDay = 5 };
+        var different = Open(1) with { LastLateFeeChargedDay = 6 };
+        var unset = Open(1);
+
+        Assert.True(left.ValueEquals(right));
+        Assert.Equal(left.GetHashCode(), right.GetHashCode());
+        Assert.False(left.ValueEquals(different));
+        Assert.False(left.ValueEquals(unset));
+    }
+
+    [Fact]
+    public void Adopt_starts_with_no_late_fees_charged()
+    {
+        var record = Release1ChiefRecord.Adopt(LocalPressureTier.Quiet, false);
+
+        Assert.Equal(0, record.LateFeesCharged);
+    }
+
+    [Fact]
+    public void A_negative_late_fee_count_throws()
+    {
+        Assert.Throws<ArgumentException>(() => (Open(1) with { LateFeesCharged = -1 }).Validate());
+    }
+
+    [Fact]
+    public void Value_equality_includes_the_late_fee_count()
+    {
+        var left = Open(1) with { LateFeesCharged = 2 };
+        var right = Open(1) with { LateFeesCharged = 2 };
+        var different = Open(1) with { LateFeesCharged = 3 };
 
         Assert.True(left.ValueEquals(right));
         Assert.Equal(left.GetHashCode(), right.GetHashCode());

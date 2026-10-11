@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
-using System.Text;
+using OrganizedCrime.Core.Persistence;
+using OrganizedCrime.Model;
 
 namespace OrganizedCrime.Persistence;
 
@@ -62,299 +62,169 @@ public sealed record LocalPressureStoreUpdateResult(
 /// Injectable filesystem boundary for testing read, flush/write, replacement,
 /// and cleanup failure behavior without a game or a real save folder.
 /// </summary>
-public interface ILocalPressureFileSystem
+public interface ILocalPressureFileSystem : ISidecarFileSystem
 {
-    bool FileExists(string path);
-    string ReadAllText(string path);
-    void CreateDirectory(string path);
-    string CreateTemporaryPath(string directory, string targetPath);
-    void WriteAllTextAndFlush(string path, string contents);
-    void ReplaceAtomically(string temporaryPath, string targetPath);
-    void DeleteFile(string path);
 }
 
 public sealed class LocalPressureStateStore
 {
-    private static readonly ConcurrentDictionary<string, object> Locks = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ILocalPressureFileSystem _fileSystem;
+    private readonly SidecarStore<LocalPressureSaveEnvelope> _store;
 
     public LocalPressureStateStore(LocalPressureSavePath savePath, ILocalPressureFileSystem? fileSystem = null)
     {
         SavePath = savePath ?? throw new ArgumentNullException(nameof(savePath));
-        _fileSystem = fileSystem ?? new LocalPressureFileSystem();
+        _store = new SidecarStore<LocalPressureSaveEnvelope>(
+            savePath.Inner,
+            fileSystem ?? (ISidecarFileSystem)new SidecarDefaultFileSystem(),
+            new SidecarStoreOptions<LocalPressureSaveEnvelope>
+            {
+                ExceptionPolicy = SidecarExceptionPolicy.StorageFailures,
+                CreateEmpty = LocalPressureSaveEnvelope.CreateEmpty,
+                Deserialize = Deserialize,
+                SerializeForValidation = ValidateIncoming,
+                MergeCurrent = Merge,
+                SerializeForWrite = SerializeMerged,
+            });
     }
 
     public LocalPressureSavePath SavePath { get; }
 
     public bool TryLoad(out LocalPressureStoreLoadResult result)
     {
-        lock (GetLock(SavePath.SidecarFilePath))
-        {
-            result = TryLoadLocked();
-            return result.Succeeded;
-        }
+        var ok = _store.TryLoad(out var load);
+        result = MapLoad(load);
+        return ok;
     }
 
-    public bool TryUpdate(
-        LocalPressurePlayerRecord incoming,
-        out LocalPressureStoreUpdateResult result)
+    public bool TryUpdate(LocalPressurePlayerRecord incoming, out LocalPressureStoreUpdateResult result)
     {
-        lock (GetLock(SavePath.SidecarFilePath))
-        {
-            if (!TryValidateIncoming(incoming, out var validationFailure))
-            {
-                result = new LocalPressureStoreUpdateResult(
-                    false,
-                    LocalPressureStoreUpdateStatus.Rejected,
-                    null,
-                    LocalPressureStoreFailureReason.InvalidIncomingRecord,
-                    validationFailure.Message);
-                return false;
-            }
-
-            var load = TryLoadLocked();
-            if (!load.Succeeded)
-            {
-                result = new LocalPressureStoreUpdateResult(
-                    false,
-                    LocalPressureStoreUpdateStatus.Rejected,
-                    null,
-                    load.FailureReason,
-                    load.Message);
-                return false;
-            }
-
-            var current = load.Envelope!;
-            var existing = current.Players.FirstOrDefault(player =>
-                string.Equals(player.PlayerId, incoming.PlayerId, StringComparison.Ordinal));
-            if (existing is not null)
-            {
-                if (incoming.Revision < existing.Revision)
-                    return Reject(LocalPressureStoreFailureReason.StaleRevision, "Incoming Local Pressure revision was stale.", out result);
-                if (incoming.Revision == existing.Revision)
-                {
-                    if (incoming == existing)
-                    {
-                        result = new LocalPressureStoreUpdateResult(
-                            true,
-                            LocalPressureStoreUpdateStatus.Idempotent,
-                            current,
-                            LocalPressureStoreFailureReason.None,
-                            "Incoming Local Pressure update was already stored.");
-                        return true;
-                    }
-
-                    return Reject(LocalPressureStoreFailureReason.RevisionConflict, "Incoming Local Pressure revision conflicted with stored state.", out result);
-                }
-            }
-
-            var nextPlayers = current.Players
-                .Where(player => !string.Equals(player.PlayerId, incoming.PlayerId, StringComparison.Ordinal))
-                .Append(incoming)
-                .ToArray();
-            var next = new LocalPressureSaveEnvelope(LocalPressureSaveCodec.CurrentSchemaVersion, nextPlayers);
-            if (!LocalPressureSaveCodec.TrySerialize(next, out var json, out var serializeResult))
-            {
-                result = new LocalPressureStoreUpdateResult(
-                    false,
-                    LocalPressureStoreUpdateStatus.Rejected,
-                    null,
-                    LocalPressureStoreFailureReason.SerializationFailed,
-                    serializeResult.Message);
-                return false;
-            }
-
-            if (!TryWriteAtomically(json, out var writeFailure))
-            {
-                result = new LocalPressureStoreUpdateResult(
-                    false,
-                    LocalPressureStoreUpdateStatus.Rejected,
-                    null,
-                    writeFailure.Reason,
-                    writeFailure.Message);
-                return false;
-            }
-
-            result = new LocalPressureStoreUpdateResult(
-                true,
-                LocalPressureStoreUpdateStatus.Updated,
-                next,
-                LocalPressureStoreFailureReason.None,
-                "Local Pressure update was stored.");
-            return true;
-        }
+        var ok = _store.TryUpdate(
+            new LocalPressureSaveEnvelope(LocalPressureSaveCodec.CurrentSchemaVersion, new[] { incoming }),
+            out var neutral);
+        result = MapUpdate(neutral);
+        return ok;
     }
 
-    private LocalPressureStoreLoadResult TryLoadLocked()
+    private static SidecarDecodeOutcome<LocalPressureSaveEnvelope> Deserialize(string json)
     {
-        if (!_fileSystem.FileExists(SavePath.SidecarFilePath))
-        {
-            return new LocalPressureStoreLoadResult(
-                true,
-                LocalPressureStoreLoadStatus.Empty,
-                LocalPressureSaveEnvelope.CreateEmpty(),
-                LocalPressureStoreFailureReason.None,
-                "Local Pressure sidecar was not found; using an empty v1 envelope.");
-        }
-
-        string json;
-        try
-        {
-            json = _fileSystem.ReadAllText(SavePath.SidecarFilePath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            return FailedLoad(LocalPressureStoreFailureReason.SidecarReadFailed, $"Local Pressure sidecar could not be read: {ex.Message}");
-        }
-
         if (!LocalPressureSaveCodec.TryDeserialize(json, out var envelope, out var decodeResult))
-        {
-            return FailedLoad(MapCodecFailure(decodeResult.Reason), decodeResult.Message);
-        }
-
-        return new LocalPressureStoreLoadResult(
-            true,
-            LocalPressureStoreLoadStatus.Loaded,
-            envelope,
-            LocalPressureStoreFailureReason.None,
-            "Local Pressure sidecar was loaded.");
+            return SidecarDecodeOutcome<LocalPressureSaveEnvelope>.Failed(MapCodecKind(decodeResult.Reason), decodeResult.Message);
+        return SidecarDecodeOutcome<LocalPressureSaveEnvelope>.Succeeded(envelope!);
     }
 
-    private bool TryWriteAtomically(string json, out WriteFailure failure)
+    private static SidecarEncodeOutcome ValidateIncoming(LocalPressureSaveEnvelope wrapped)
     {
-        string? temporaryPath = null;
-        try
-        {
-            try
-            {
-                _fileSystem.CreateDirectory(SavePath.SidecarDirectory);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-            {
-                failure = new WriteFailure(LocalPressureStoreFailureReason.DirectoryCreationFailed, $"Local Pressure sidecar directory could not be created: {ex.Message}");
-                return false;
-            }
-
-            temporaryPath = _fileSystem.CreateTemporaryPath(SavePath.SidecarDirectory, SavePath.SidecarFilePath);
-            try
-            {
-                _fileSystem.WriteAllTextAndFlush(temporaryPath, json);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-            {
-                failure = new WriteFailure(LocalPressureStoreFailureReason.TemporaryFileWriteFailed, $"Local Pressure temporary sidecar could not be written: {ex.Message}");
-                return false;
-            }
-
-            try
-            {
-                _fileSystem.ReplaceAtomically(temporaryPath, SavePath.SidecarFilePath);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)
-            {
-                failure = new WriteFailure(LocalPressureStoreFailureReason.AtomicReplacementFailed, $"Local Pressure sidecar could not be replaced atomically: {ex.Message}");
-                return false;
-            }
-
-            failure = WriteFailure.None;
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or PlatformNotSupportedException)
-        {
-            failure = new WriteFailure(LocalPressureStoreFailureReason.TemporaryFileWriteFailed, $"Local Pressure sidecar write failed: {ex.Message}");
-            return false;
-        }
-        finally
-        {
-            if (temporaryPath is not null)
-            {
-                try
-                {
-                    _fileSystem.DeleteFile(temporaryPath);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-                {
-                    // Never replace the primary failure with cleanup noise.
-                }
-            }
-        }
+        if (!LocalPressureSaveCodec.TrySerialize(wrapped, out _, out var validationFailure))
+            return SidecarEncodeOutcome.Failed("InvalidIncomingRecord", validationFailure.Message);
+        return SidecarEncodeOutcome.Succeeded(string.Empty);
     }
 
-    private static bool TryValidateIncoming(LocalPressurePlayerRecord? incoming, out LocalPressureCodecResult result)
+    private static SidecarMergeOutcome<LocalPressureSaveEnvelope> Merge(LocalPressureSaveEnvelope current, LocalPressureSaveEnvelope wrapped)
     {
-        return LocalPressureSaveCodec.TrySerialize(
-            new LocalPressureSaveEnvelope(LocalPressureSaveCodec.CurrentSchemaVersion, new[] { incoming! }),
-            out _,
-            out result);
+        var incoming = wrapped.Players.Single();
+        var existing = current.Players.FirstOrDefault(candidate =>
+            string.Equals(candidate.PlayerId, incoming.PlayerId, StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            if (incoming.Revision < existing.Revision)
+                return SidecarMergeOutcome<LocalPressureSaveEnvelope>.Reject("StaleRevision", "Incoming Local Pressure revision was stale.");
+            if (incoming.Revision == existing.Revision)
+            {
+                if (incoming == existing)
+                    return SidecarMergeOutcome<LocalPressureSaveEnvelope>.ReplayCurrent(current);
+                return SidecarMergeOutcome<LocalPressureSaveEnvelope>.Reject("RevisionConflict", "Incoming Local Pressure revision conflicted with stored state.");
+            }
+        }
+
+        var nextPlayers = current.Players
+            .Where(candidate => !string.Equals(candidate.PlayerId, incoming.PlayerId, StringComparison.Ordinal))
+            .Append(incoming)
+            .ToArray();
+        return SidecarMergeOutcome<LocalPressureSaveEnvelope>.ProceedWith(
+            new LocalPressureSaveEnvelope(LocalPressureSaveCodec.CurrentSchemaVersion, nextPlayers));
     }
 
-    private static bool Reject(
-        LocalPressureStoreFailureReason reason,
-        string message,
-        out LocalPressureStoreUpdateResult result)
+    private static SidecarEncodeOutcome SerializeMerged(LocalPressureSaveEnvelope merged)
     {
-        result = new LocalPressureStoreUpdateResult(false, LocalPressureStoreUpdateStatus.Rejected, null, reason, message);
-        return false;
+        if (!LocalPressureSaveCodec.TrySerialize(merged, out var mergedJson, out var serializeResult))
+            return SidecarEncodeOutcome.Failed("SerializationFailed", serializeResult.Message);
+        return SidecarEncodeOutcome.Succeeded(mergedJson);
     }
 
-    private static LocalPressureStoreLoadResult FailedLoad(LocalPressureStoreFailureReason reason, string message) =>
-        new(false, LocalPressureStoreLoadStatus.Failed, null, reason, message);
-
-    private static LocalPressureStoreFailureReason MapCodecFailure(LocalPressureCodecFailureReason reason) => reason switch
+    private static LocalPressureStoreLoadResult MapLoad(SidecarLoadResult<LocalPressureSaveEnvelope> load) => load.Status switch
     {
-        LocalPressureCodecFailureReason.EmptyJson or LocalPressureCodecFailureReason.MalformedJson => LocalPressureStoreFailureReason.EmptyOrMalformedJson,
-        LocalPressureCodecFailureReason.InvalidRoot => LocalPressureStoreFailureReason.InvalidRoot,
-        LocalPressureCodecFailureReason.MissingRequiredField => LocalPressureStoreFailureReason.MissingRequiredField,
-        LocalPressureCodecFailureReason.InvalidJsonType => LocalPressureStoreFailureReason.InvalidJsonType,
-        LocalPressureCodecFailureReason.InvalidSchemaVersion => LocalPressureStoreFailureReason.InvalidSchemaVersion,
-        LocalPressureCodecFailureReason.MissingPlayers => LocalPressureStoreFailureReason.MissingPlayers,
-        LocalPressureCodecFailureReason.UnsupportedSchema => LocalPressureStoreFailureReason.UnsupportedSchema,
-        LocalPressureCodecFailureReason.InvalidPlayerId => LocalPressureStoreFailureReason.InvalidPlayerId,
-        LocalPressureCodecFailureReason.DuplicatePlayerId => LocalPressureStoreFailureReason.DuplicatePlayerId,
-        LocalPressureCodecFailureReason.InvalidHeat => LocalPressureStoreFailureReason.InvalidHeat,
-        LocalPressureCodecFailureReason.InvalidGameTime => LocalPressureStoreFailureReason.InvalidGameTime,
-        LocalPressureCodecFailureReason.InvalidRevision => LocalPressureStoreFailureReason.InvalidRevision,
-        LocalPressureCodecFailureReason.InvalidContext => LocalPressureStoreFailureReason.InvalidContext,
-        _ => LocalPressureStoreFailureReason.InvalidCurrentState
+        SidecarLoadStatus.Empty => new(true, LocalPressureStoreLoadStatus.Empty, load.Envelope, LocalPressureStoreFailureReason.None, "Local Pressure sidecar was not found; using an empty v1 envelope."),
+        SidecarLoadStatus.Loaded => new(true, LocalPressureStoreLoadStatus.Loaded, load.Envelope, LocalPressureStoreFailureReason.None, "Local Pressure sidecar was loaded."),
+        _ when load.IoFailure.Stage != SidecarIoStage.None => new(false, LocalPressureStoreLoadStatus.Failed, null, LocalPressureStoreFailureReason.SidecarReadFailed, $"Local Pressure sidecar could not be read: {load.IoFailure.Detail}"),
+        _ => new(false, LocalPressureStoreLoadStatus.Failed, null, MapReason(load.FailureKind), load.Message),
     };
 
-    private static object GetLock(string path) => Locks.GetOrAdd(Path.GetFullPath(path), _ => new object());
-
-    private readonly record struct WriteFailure(LocalPressureStoreFailureReason Reason, string Message)
+    private static LocalPressureStoreUpdateResult MapUpdate(SidecarUpdateResult<LocalPressureSaveEnvelope> update) => update.Status switch
     {
-        public static WriteFailure None => new(LocalPressureStoreFailureReason.None, string.Empty);
-    }
-}
+        SidecarUpdateStatus.Updated => new(true, LocalPressureStoreUpdateStatus.Updated, update.Envelope, LocalPressureStoreFailureReason.None, "Local Pressure update was stored."),
+        SidecarUpdateStatus.Idempotent => new(true, LocalPressureStoreUpdateStatus.Idempotent, update.Envelope, LocalPressureStoreFailureReason.None, "Incoming Local Pressure update was already stored."),
+        _ when update.IoFailure.Stage != SidecarIoStage.None => new(false, LocalPressureStoreUpdateStatus.Rejected, null, MapIoReason(update.IoFailure.Stage), FormatIoMessage(update.IoFailure)),
+        _ => new(false, LocalPressureStoreUpdateStatus.Rejected, null, MapReason(update.FailureKind), update.Message),
+    };
 
-internal sealed class LocalPressureFileSystem : ILocalPressureFileSystem
-{
-    public bool FileExists(string path) => File.Exists(path);
-    public string ReadAllText(string path) => File.ReadAllText(path);
-    public void CreateDirectory(string path) => Directory.CreateDirectory(path);
-
-    public string CreateTemporaryPath(string directory, string targetPath) =>
-        Path.Combine(directory, $".{Path.GetFileName(targetPath)}.{Guid.NewGuid():N}.tmp");
-
-    public void WriteAllTextAndFlush(string path, string contents)
+    private static string MapCodecKind(LocalPressureCodecFailureReason reason) => reason switch
     {
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        writer.Write(contents);
-        writer.Flush();
-        stream.Flush(flushToDisk: true);
-    }
+        LocalPressureCodecFailureReason.EmptyJson => "EmptyOrMalformedJson",
+        LocalPressureCodecFailureReason.MalformedJson => "EmptyOrMalformedJson",
+        LocalPressureCodecFailureReason.InvalidRoot => "InvalidRoot",
+        LocalPressureCodecFailureReason.MissingRequiredField => "MissingRequiredField",
+        LocalPressureCodecFailureReason.InvalidJsonType => "InvalidJsonType",
+        LocalPressureCodecFailureReason.InvalidSchemaVersion => "InvalidSchemaVersion",
+        LocalPressureCodecFailureReason.MissingPlayers => "MissingPlayers",
+        LocalPressureCodecFailureReason.UnsupportedSchema => "UnsupportedSchema",
+        LocalPressureCodecFailureReason.InvalidPlayerId => "InvalidPlayerId",
+        LocalPressureCodecFailureReason.DuplicatePlayerId => "DuplicatePlayerId",
+        LocalPressureCodecFailureReason.InvalidHeat => "InvalidHeat",
+        LocalPressureCodecFailureReason.InvalidGameTime => "InvalidGameTime",
+        LocalPressureCodecFailureReason.InvalidRevision => "InvalidRevision",
+        LocalPressureCodecFailureReason.InvalidContext => "InvalidContext",
+        _ => "InvalidCurrentState",
+    };
 
-    public void ReplaceAtomically(string temporaryPath, string targetPath)
+    private static LocalPressureStoreFailureReason MapReason(string kind) => kind switch
     {
-        if (File.Exists(targetPath))
-            File.Replace(temporaryPath, targetPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
-        else
-            File.Move(temporaryPath, targetPath);
-    }
+        "InvalidIncomingRecord" => LocalPressureStoreFailureReason.InvalidIncomingRecord,
+        "SerializationFailed" => LocalPressureStoreFailureReason.SerializationFailed,
+        "StaleRevision" => LocalPressureStoreFailureReason.StaleRevision,
+        "RevisionConflict" => LocalPressureStoreFailureReason.RevisionConflict,
+        "EmptyOrMalformedJson" => LocalPressureStoreFailureReason.EmptyOrMalformedJson,
+        "InvalidRoot" => LocalPressureStoreFailureReason.InvalidRoot,
+        "MissingRequiredField" => LocalPressureStoreFailureReason.MissingRequiredField,
+        "InvalidJsonType" => LocalPressureStoreFailureReason.InvalidJsonType,
+        "InvalidSchemaVersion" => LocalPressureStoreFailureReason.InvalidSchemaVersion,
+        "MissingPlayers" => LocalPressureStoreFailureReason.MissingPlayers,
+        "UnsupportedSchema" => LocalPressureStoreFailureReason.UnsupportedSchema,
+        "InvalidPlayerId" => LocalPressureStoreFailureReason.InvalidPlayerId,
+        "DuplicatePlayerId" => LocalPressureStoreFailureReason.DuplicatePlayerId,
+        "InvalidHeat" => LocalPressureStoreFailureReason.InvalidHeat,
+        "InvalidGameTime" => LocalPressureStoreFailureReason.InvalidGameTime,
+        "InvalidRevision" => LocalPressureStoreFailureReason.InvalidRevision,
+        "InvalidContext" => LocalPressureStoreFailureReason.InvalidContext,
+        "InvalidCurrentState" => LocalPressureStoreFailureReason.InvalidCurrentState,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown sidecar failure kind."),
+    };
 
-    public void DeleteFile(string path)
+    private static LocalPressureStoreFailureReason MapIoReason(SidecarIoStage stage) => stage switch
     {
-        if (File.Exists(path))
-            File.Delete(path);
-    }
+        SidecarIoStage.Read => LocalPressureStoreFailureReason.SidecarReadFailed,
+        SidecarIoStage.CreateDirectory => LocalPressureStoreFailureReason.DirectoryCreationFailed,
+        SidecarIoStage.CreateTemporaryPath or SidecarIoStage.WriteTemporary => LocalPressureStoreFailureReason.TemporaryFileWriteFailed,
+        SidecarIoStage.ReplaceAtomically => LocalPressureStoreFailureReason.AtomicReplacementFailed,
+        _ => throw new ArgumentOutOfRangeException(nameof(stage), stage, "Unknown sidecar IO stage."),
+    };
+
+    private static string FormatIoMessage(SidecarIoFailure failure) => failure.Stage switch
+    {
+        SidecarIoStage.Read => $"Local Pressure sidecar could not be read: {failure.Detail}",
+        SidecarIoStage.CreateDirectory => $"Local Pressure sidecar directory could not be created: {failure.Detail}",
+        SidecarIoStage.CreateTemporaryPath => $"Local Pressure sidecar write failed: {failure.Detail}",
+        SidecarIoStage.WriteTemporary => $"Local Pressure temporary sidecar could not be written: {failure.Detail}",
+        SidecarIoStage.ReplaceAtomically => $"Local Pressure sidecar could not be replaced atomically: {failure.Detail}",
+        _ => throw new ArgumentOutOfRangeException(nameof(failure), failure.Stage, "Unknown sidecar IO stage."),
+    };
 }

@@ -285,6 +285,79 @@ public sealed class Release1StoryRuntimeServiceTests
         Assert.Contains("revert-tolerant", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Applied_chief_effect_for_the_live_round_with_a_stale_revision_is_superseded()
+    {
+        // OC-77: the relaxed Applied branch of IsCurrentEffectAuthorization exists for orphaned
+        // effects (the live record has moved on to a later round). An Applied effect the live
+        // record still describes must pass the strict rule instead: same round, same revision
+        // (or the one settled successor), correlation still listed, still Paying or Settled.
+        var harness = ActiveHarness();
+        var authorization = PreparePaidChiefRound(harness, out var effectId);
+        var live = harness.Service.State!.ChiefRecord!;
+        var drifted = live with { Revision = live.Revision + 1 };
+        Assert.Equal(Release1StoryCommandStatus.Accepted, harness.Service.TrySetChiefRecord(drifted).Status);
+        harness.Service.OnSaveStart();
+        harness.Service.OnSaveComplete();
+
+        var commit = harness.Service.TryCommitNativeEffect(effectId, authorization, harness.Service.State!.Revision);
+
+        Assert.Equal(Release1StoryCommandStatus.Rejected, commit.Status);
+        Assert.Equal(Release1StoryRuntimeRejectReason.InvalidTransition, commit.RejectReason);
+        Assert.Contains("superseded", commit.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Applied_chief_effect_orphaned_by_a_new_round_still_commits()
+    {
+        // OC-77 guard: the settled drain fix relies on the relaxed branch for exactly this
+        // shape (a new arrest reset the ladder while the payoff was still Applied), so the
+        // narrowing must keep accepting it.
+        var harness = ActiveHarness();
+        var authorization = PreparePaidChiefRound(harness, out var effectId);
+        var live = harness.Service.State!.ChiefRecord!;
+        var reopened = live with
+        {
+            State = Release1ChiefState.DemandOpen,
+            DemandRound = live.DemandRound + 1,
+            AcceptedLogicalCorrelations = Array.Empty<string>(),
+            NativeEffectIds = Array.Empty<string>(),
+            Revision = live.Revision + 1
+        };
+        Assert.Equal(Release1StoryCommandStatus.Accepted, harness.Service.TrySetChiefRecord(reopened).Status);
+        harness.Service.OnSaveStart();
+        harness.Service.OnSaveComplete();
+
+        var commit = harness.Service.TryCommitNativeEffect(effectId, authorization, harness.Service.State!.Revision);
+
+        Assert.Equal(Release1StoryCommandStatus.Accepted, commit.Status);
+        Assert.Equal(Release1NativeEffectPhase.Committed, harness.Service.State!.NativeEffects.Single(e => e.EffectId == effectId).Phase);
+    }
+
+    private static string PreparePaidChiefRound(Harness harness, out string effectId)
+    {
+        var playerId = harness.Context.Snapshot.PlayerId;
+        var record = new Release1ChiefRecord(
+            Adopted: true, AdoptedTier: LocalPressureTier.Watched, AdoptedKnownOffender: true, DemandRound: 1,
+            State: Release1ChiefState.DemandOpen, WatchLinesSent: 0, LockdownAnnouncements: 0, LockdownEngaged: false,
+            PaidLifts: 0, CooledLifts: 0, DeclineRepliesSent: 0, PaymentBlockedNotices: 0, LastShortfallNoticed: null,
+            AcceptedLogicalCorrelations: Array.Empty<string>(), NativeEffectIds: Array.Empty<string>(), Revision: 0);
+        var set = harness.Service.TrySetChiefRecord(record);
+        if (!set.Accepted) throw new InvalidOperationException("Chief demand fixture setup failed: " + set.Message);
+        var authorization = Release1LogicalCorrelation.Create(playerId, Release1MissionCatalog.ChiefCampbell, 1, Release1TransitionKind.ChiefPaymentAccepted, "pay-r1").Value;
+        var effect = new Release1NativeEffectJournalEntry(
+            "chief-campbell-cash-v1-r1", Release1MissionCatalog.ChiefCampbell, 1, Release1ChiefEffect.Kind,
+            Release1ChiefEffect.WalletSource, Release1ChiefEffect.Scope, "25000",
+            Release1NativeEffectPhase.Prepared, null, harness.Service.State!.Revision + 1,
+            AuthorizedStoryCorrelationId: authorization, AuthorizedMissionRevision: 0);
+        var prepared = harness.Service.TryPrepareNativeEffect(effect);
+        if (!prepared.Accepted) throw new InvalidOperationException("Chief effect fixture setup failed: " + prepared.Message);
+        var marked = harness.Service.TryMarkNativeEffectApplied(effect.EffectId, "native-r1", Release1NativeEffectPersistenceMode.RevertTolerant);
+        if (!marked.Accepted) throw new InvalidOperationException("Chief mark-applied fixture setup failed: " + marked.Message);
+        effectId = effect.EffectId;
+        return authorization;
+    }
+
     private static Release1StoryRuntimeService ActiveSmallCourtesyStory(FakeRepository repository, out int attempt)
     {
         var context = new FakeContext();

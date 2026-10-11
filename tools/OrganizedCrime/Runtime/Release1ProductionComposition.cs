@@ -1,3 +1,4 @@
+using OrganizedCrime.Runtime.Release1.World;
 using System.Linq;
 using OrganizedCrime.Model;
 
@@ -31,14 +32,15 @@ public sealed class Release1ProductionComposition : IDisposable
         Release1StoryRuntimeService story,
         IRelease1PostBenziesUnlockReader reader,
         IRelease1PhoneCallQueue queue,
-        IRelease1SmallCourtesyWorld smallCourtesyWorld,
+        IRelease1ProductionWorld smallCourtesyWorld,
         Action<string>? log = null,
         Func<DateTime>? utcNow = null,
         Func<float>? bannerNow = null,
         IRelease1DecisionPromptPlatform? promptPlatform = null,
         Release1PresentationMode mode = Release1PresentationMode.ImguiFallback,
         IRelease1NativePresentation? native = null,
-        Func<Release1WorldPoint?>? holdRoomMarker = null)
+        Func<Release1WorldPoint?>? holdRoomMarker = null,
+        Func<bool>? nellDecisionOwnedElsewhere = null)
     {
         ArgumentNullException.ThrowIfNull(story);
         ArgumentNullException.ThrowIfNull(reader);
@@ -68,7 +70,7 @@ public sealed class Release1ProductionComposition : IDisposable
         {
             var commands = new Release1PresentationCommandRouter(
                 Publisher, SmallCourtesy.Presenter, WrongAddress.Presenter, RoomWithNoName.Presenter, ShortNotice.Presenter, KeepTheLightsOff.Presenter, TheEnvelope.Presenter);
-            Projector = new Release1PresentationProjector(story, () => Release1PresentationPlanner.Build(BuildPresentationInputs()), native!, commands, log);
+            Projector = new Release1PresentationProjector(story, () => Release1PresentationPlanner.Build(BuildPresentationInputs()), native!, commands, log, decisionOwnedElsewhere: nellDecisionOwnedElsewhere);
         }
         else
         {
